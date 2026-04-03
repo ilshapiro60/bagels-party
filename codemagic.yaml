@@ -8,8 +8,9 @@
 # 2. App Store Connect → Users and Access → Integrations → App Store Connect API → key with App Manager. Download .p8 once.
 # 3. Codemagic → Teams → Personal Account → Integrations → Developer Portal / App Store Connect → add the API key.
 # 4. Set `integrations.app_store_connect` below to that integration’s exact name (replace `codemagic` if different).
-# 5. Codemagic → Your application → Environment variables (plain text or secure):
-#      APP_STORE_APPLE_ID = numeric Apple ID (App Store Connect → app → App Information → Apple ID).
+# 5. Codemagic → bagels-party → Environment variables: add variable APP_STORE_APPLE_ID (Apple ID number)
+#    and assign it to group `app_store` (create the group by typing that name in "Search for group...").
+#    The workflow below loads that group via `environment.groups`.
 # 6. Signing: Codemagic → Teams → Code signing identities → iOS, or let the workflow fetch profiles via the same API key
 #    (see https://docs.codemagic.io/yaml-code-signing/signing-ios/ ).
 #
@@ -27,6 +28,8 @@ workflows:
     integrations:
       app_store_connect: codemagic
     environment:
+      groups:
+        - app_store
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.pawparty.pawParty
