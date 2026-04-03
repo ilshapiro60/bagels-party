@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "1073924094679",
+    "project_id": "pawparty-app",
+    "storage_bucket": "pawparty-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1073924094679:android:5ab2b340e05d85541ece92",
+        "android_client_info": {
+          "package_name": "com.pawparty.paw_party"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1073924094679-mqs2gso1op9bugjcv7cehtuh5frp12bd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pawparty.paw_party",
+            "certificate_hash": "9dfd07d4778c8571876bbd2dbda279bd75b66e1c"
+          }
+        },
+        {
+          "client_id": "1073924094679-k3evsri0r53cvh5v9ostl74vr8e6168l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-JqkNxN7ACYkDiU6rDs79OYO4nh0YpXU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1073924094679-k3evsri0r53cvh5v9ostl74vr8e6168l.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1073924094679-otc4k6jhnoj13a5eqra5t8b6so9uhd1f.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.pawparty.pawParty"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
