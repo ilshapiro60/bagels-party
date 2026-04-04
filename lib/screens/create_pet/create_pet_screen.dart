@@ -14,6 +14,7 @@ import '../../widgets/paw_file_image.dart';
 import '../../widgets/paw_video_thumb.dart';
 import '../../widgets/personality_slider.dart';
 import '../../services/firebase_storage_service.dart';
+import '../../services/firestore_pet_repository.dart';
 
 class CreatePetScreen extends ConsumerStatefulWidget {
   const CreatePetScreen({super.key, this.editPetId, this.initialPet});
@@ -65,8 +66,7 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
   bool _saving = false;
 
   static bool _isRemoteMedia(String path) {
-    final p = path.toLowerCase();
-    return p.startsWith('http://') || p.startsWith('https://');
+    return FirestorePetRepository.isShareableMediaUrl(path);
   }
 
   @override

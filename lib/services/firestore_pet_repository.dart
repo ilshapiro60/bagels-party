@@ -11,6 +11,35 @@ class FirestorePetRepository {
   static CollectionReference<Map<String, dynamic>> _petsCol(String uid) =>
       _db.collection('profiles').doc(uid).collection('pets');
 
+  /// Only values other devices can load (not device-local cache paths).
+  static bool isShareableMediaUrl(String? url) {
+    if (url == null || url.isEmpty) return false;
+    final u = url.trim();
+    return u.startsWith('http://') ||
+        u.startsWith('https://') ||
+        u.startsWith('gs://');
+  }
+
+  static void _sanitizeMediaFieldsInMap(Map<String, dynamic> m) {
+    if (!isShareableMediaUrl(m['photoUrl'] as String?)) {
+      m['photoUrl'] = null;
+    }
+    final pg = m['photoGallery'];
+    if (pg is List) {
+      m['photoGallery'] = pg
+          .whereType<String>()
+          .where(isShareableMediaUrl)
+          .toList();
+    }
+    final vp = m['videoPaths'];
+    if (vp is List) {
+      m['videoPaths'] = vp
+          .whereType<String>()
+          .where(isShareableMediaUrl)
+          .toList();
+    }
+  }
+
   static String _petCreatedIso(dynamic v) {
     if (v is Timestamp) return v.toDate().toIso8601String();
     if (v is String) return v;
@@ -21,11 +50,20 @@ class FirestorePetRepository {
     final m = Map<String, dynamic>.from(snap.data() ?? {});
     m['id'] = snap.id;
     m['createdAt'] = _petCreatedIso(m['createdAt']);
+    final parent = snap.reference.parent.parent;
+    final oid = m['ownerId'];
+    final ownerIdMissing =
+        oid == null || (oid is String && oid.trim().isEmpty);
+    if (ownerIdMissing && parent != null) {
+      m['ownerId'] = parent.id;
+    }
+    _sanitizeMediaFieldsInMap(m);
     return Pet.fromMap(m);
   }
 
   static Map<String, dynamic> petToFirestore(Pet p) {
     final m = p.toMap();
+    _sanitizeMediaFieldsInMap(m);
     m['createdAt'] = Timestamp.fromDate(p.createdAt);
     return m;
   }
