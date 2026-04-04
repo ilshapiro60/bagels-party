@@ -57,7 +57,8 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       _radiusMiles,
     );
 
-    final viewerPoint = viewerMapPoint(authState.user);
+    final viewerPoint = discoverMapAnchor(authState.user, visiblePets);
+    final showViewerOnMap = profileHasMapCoordinates(authState.user);
 
     return Scaffold(
       appBar: AppBar(
@@ -87,7 +88,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         children: [
           _buildSearchBar(),
           _buildFilters(),
-          _buildRadiusSlider(),
+          _buildRadiusSlider(showViewerOnMap),
           _buildMapPrivacyBanner(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -96,6 +97,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               viewerPoint: viewerPoint,
               viewerProfile: authState.user,
               radiusMiles: _radiusMiles,
+              showViewerLocation: showViewerOnMap,
               onPetMarkerTapped: (pet) => _scrollToPet(pet.id),
             ),
           ),
@@ -205,31 +207,53 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     );
   }
 
-  Widget _buildRadiusSlider() {
+  Widget _buildRadiusSlider(bool distanceFilterActive) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.location_on, size: 18, color: PawPartyColors.textSecondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Slider(
-              value: _radiusMiles,
-              min: 1,
-              max: 15,
-              divisions: 14,
-              activeColor: PawPartyColors.primary,
-              label: '${_radiusMiles.toInt()} mi',
-              onChanged: (v) => setState(() => _radiusMiles = v),
+          if (!distanceFilterActive)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Distance filter needs your area — tap the location icon above, '
+                'or add coordinates from your profile.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: PawPartyColors.textSecondary,
+                ),
+              ),
             ),
-          ),
-          Text(
-            '${_radiusMiles.toInt()} mi',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: PawPartyColors.textPrimary,
-            ),
+          Row(
+            children: [
+              Icon(Icons.location_on, size: 18, color: PawPartyColors.textSecondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Slider(
+                  value: _radiusMiles,
+                  min: 1,
+                  max: 15,
+                  divisions: 14,
+                  activeColor: PawPartyColors.primary,
+                  label: '${_radiusMiles.toInt()} mi',
+                  onChanged: distanceFilterActive
+                      ? (v) => setState(() => _radiusMiles = v)
+                      : null,
+                ),
+              ),
+              Text(
+                '${_radiusMiles.toInt()} mi',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: distanceFilterActive
+                      ? PawPartyColors.textPrimary
+                      : PawPartyColors.textHint,
+                ),
+              ),
+            ],
           ),
         ],
       ),

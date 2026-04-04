@@ -77,8 +77,10 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
   void _createMeetup() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Party created! Invites sent to matching families 🎉🍕'),
-        backgroundColor: PawPartyColors.success,
+        content: const Text(
+          'Preview only — parties are not saved or sent yet. Backend coming soon.',
+        ),
+        backgroundColor: PawPartyColors.textSecondary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),

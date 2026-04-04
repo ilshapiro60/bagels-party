@@ -26,8 +26,8 @@ class HostVenueMap extends StatelessWidget {
       return MapUnavailablePlaceholder(height: height);
     }
 
-    final anchorLat = anchorLatitude ?? kDefaultMapLat;
-    final anchorLng = anchorLongitude ?? kDefaultMapLng;
+    final anchorLat = anchorLatitude ?? kFallbackMapLat;
+    final anchorLng = anchorLongitude ?? kFallbackMapLng;
     final venue = fuzzyPublicLocation(
       anchorLat: anchorLat,
       anchorLng: anchorLng,

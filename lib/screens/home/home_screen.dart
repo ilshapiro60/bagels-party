@@ -442,26 +442,12 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '12 active hosts • 47 parties this year',
+                  'Discover pets nearby and host your own meetups.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
+                    height: 1.35,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.star, size: 16, color: PawPartyColors.pizzaGold),
-                    const SizedBox(width: 4),
-                    Text(
-                      '4.8 avg rating',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),

@@ -1,4 +1,6 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show TimeoutException, unawaited;
+
+import 'package:flutter/foundation.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -56,7 +58,29 @@ class AuthStateNotifier extends Notifier<AuthState> {
     if (!isFirebaseInitialized) return;
     final fbUser = FirebaseAuth.instance.currentUser;
     if (fbUser == null || fbUser.isAnonymous) return;
-    await _applyAuthenticatedUser(fbUser);
+    try {
+      await _applyAuthenticatedUser(fbUser).timeout(
+        const Duration(seconds: 25),
+      );
+    } on TimeoutException catch (e, st) {
+      debugPrint('restoreSession timed out: $e\n$st');
+      await _clearStaleSessionAfterRestoreFailure();
+    } catch (e, st) {
+      debugPrint('restoreSession failed: $e\n$st');
+      await _clearStaleSessionAfterRestoreFailure();
+    }
+  }
+
+  /// Firebase user exists but Firestore/profile load failed; avoid infinite
+  /// splash and let the user sign in again.
+  Future<void> _clearStaleSessionAfterRestoreFailure() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {}
+    await AuthPersistence.clear();
+    ref.read(userPetsProvider.notifier).clear();
+    state = const AuthState();
+    authRouterRefresh.notifyAuthChanged();
   }
 
   Future<void> _applyAuthenticatedUser(User u) async {

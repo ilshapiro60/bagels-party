@@ -17,12 +17,15 @@ class NearbyPetsMap extends StatefulWidget {
     this.viewerProfile,
     this.height = 220,
     this.onPetMarkerTapped,
+    /// When false, no "You" marker or radius circle (user location unknown).
+    this.showViewerLocation = true,
   });
 
   final List<Pet> pets;
   final GeoPoint viewerPoint;
   final UserProfile? viewerProfile;
   final double radiusMiles;
+  final bool showViewerLocation;
   final double height;
   final ValueChanged<Pet>? onPetMarkerTapped;
 
@@ -46,18 +49,24 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
   }
 
   Set<Marker> _buildMarkers() {
-    final you = LatLng(widget.viewerPoint.latitude, widget.viewerPoint.longitude);
-    final markers = <Marker>{
-      Marker(
-        markerId: const MarkerId('you'),
-        position: you,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        infoWindow: const InfoWindow(
-          title: 'You (approximate)',
-          snippet: 'Your general area on the map',
+    final markers = <Marker>{};
+    if (widget.showViewerLocation) {
+      final you = LatLng(
+        widget.viewerPoint.latitude,
+        widget.viewerPoint.longitude,
+      );
+      markers.add(
+        Marker(
+          markerId: const MarkerId('you'),
+          position: you,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          infoWindow: const InfoWindow(
+            title: 'You (approximate)',
+            snippet: 'Your general area on the map',
+          ),
         ),
-      ),
-    };
+      );
+    }
 
     for (final pet in widget.pets) {
       final pt = ownerApproximateArea(pet, viewer: widget.viewerProfile);
@@ -86,6 +95,7 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
   }
 
   Set<Circle> _buildCircles() {
+    if (!widget.showViewerLocation) return {};
     final you = LatLng(widget.viewerPoint.latitude, widget.viewerPoint.longitude);
     return {
       Circle(

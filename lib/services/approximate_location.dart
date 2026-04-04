@@ -3,9 +3,10 @@ import 'dart:math' as math;
 import '../models/pet.dart';
 import '../models/user_profile.dart';
 
-/// Default map anchor when the user has not shared location yet (NYC area).
-const double kDefaultMapLat = 40.7128;
-const double kDefaultMapLng = -74.0060;
+/// Neutral map anchor when there is no user location and no pets to center on
+/// (geographic center of the contiguous US — not a real user position).
+const double kFallbackMapLat = 39.8283;
+const double kFallbackMapLng = -98.5795;
 
 /// Public map points are intentionally offset from real coordinates so the
 /// map shows an **approximate area**, not a precise home location.
@@ -45,15 +46,41 @@ double haversineMeters(GeoPoint a, GeoPoint b) {
   return 2 * earthM * math.asin(math.sqrt(x.clamp(0.0, 1.0)));
 }
 
+bool profileHasMapCoordinates(UserProfile? user) =>
+    user != null &&
+    user.latitude != null &&
+    user.longitude != null;
+
 GeoPoint viewerMapPoint(UserProfile? user) {
-  final lat = user?.latitude ?? kDefaultMapLat;
-  final lng = user?.longitude ?? kDefaultMapLng;
+  final lat = user?.latitude ?? kFallbackMapLat;
+  final lng = user?.longitude ?? kFallbackMapLng;
   final id = user?.id ?? 'guest';
   return fuzzyPublicLocation(
     anchorLat: lat,
     anchorLng: lng,
     stableKey: 'pawparty:viewer:$id',
   );
+}
+
+/// Discover map: fuzzy viewer position when GPS/profile coords exist; otherwise
+/// centroid of [pets] so we never imply a random city is "you".
+GeoPoint discoverMapAnchor(UserProfile? user, List<Pet> pets) {
+  if (profileHasMapCoordinates(user)) {
+    return viewerMapPoint(user);
+  }
+  if (pets.isNotEmpty) {
+    var lat = 0.0;
+    var lng = 0.0;
+    for (final p in pets) {
+      final g = ownerApproximateArea(p, viewer: user);
+      lat += g.latitude;
+      lng += g.longitude;
+    }
+    lat /= pets.length;
+    lng /= pets.length;
+    return GeoPoint(lat, lng);
+  }
+  return const GeoPoint(kFallbackMapLat, kFallbackMapLng);
 }
 
 GeoPoint ownerApproximateArea(Pet pet, {UserProfile? viewer}) {
@@ -64,8 +91,8 @@ GeoPoint ownerApproximateArea(Pet pet, {UserProfile? viewer}) {
       stableKey: 'pawparty:owner:${pet.ownerId}',
     );
   }
-  final lat = viewer?.latitude ?? kDefaultMapLat;
-  final lng = viewer?.longitude ?? kDefaultMapLng;
+  final lat = viewer?.latitude ?? kFallbackMapLat;
+  final lng = viewer?.longitude ?? kFallbackMapLng;
   return fuzzyPublicLocation(
     anchorLat: lat,
     anchorLng: lng,
@@ -79,6 +106,9 @@ List<Pet> petsWithinRadiusMiles(
   UserProfile? viewer,
   double radiusMiles,
 ) {
+  if (!profileHasMapCoordinates(viewer)) {
+    return List<Pet>.from(pets);
+  }
   final you = viewerMapPoint(viewer);
   final maxM = radiusMiles * 1609.34;
   return pets.where((p) {

@@ -22,8 +22,13 @@ class _PawPartyAppState extends ConsumerState<PawPartyApp> {
   }
 
   Future<void> _restore() async {
-    await ref.read(authStateProvider.notifier).restoreSession();
-    if (mounted) setState(() => _sessionReady = true);
+    try {
+      await ref.read(authStateProvider.notifier).restoreSession();
+    } catch (e, st) {
+      debugPrint('Startup session restore error: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _sessionReady = true);
+    }
   }
 
   @override
