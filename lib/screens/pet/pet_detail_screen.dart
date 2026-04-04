@@ -15,6 +15,15 @@ import '../../widgets/fullscreen_video.dart';
 import '../../widgets/paw_file_image.dart';
 import '../../widgets/paw_video_thumb.dart';
 
+void _invalidatePetBuddyCaches(WidgetRef ref) {
+  for (final p in ref.read(userPetsProvider)) {
+    ref.invalidate(buddyPetsForPetProvider(p.id));
+  }
+  ref.invalidate(petBuddyOwnerMutesProvider);
+  ref.invalidate(incomingPetBuddyRequestsProvider);
+  ref.invalidate(outgoingPetBuddyRequestsProvider);
+}
+
 class PetDetailScreen extends ConsumerWidget {
   const PetDetailScreen({super.key, required this.petId});
 
@@ -83,7 +92,7 @@ class PetDetailScreen extends ConsumerWidget {
             const SizedBox(height: 20),
           ],
           _PetProfileHeader(pet: pet, isMine: isMine),
-          _PetBuddiesStrip(petId: pet.id),
+          _PetBuddiesStrip(profilePetId: pet.id, isMine: isMine),
           if (pet.bio != null && pet.bio!.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(pet.bio!, style: Theme.of(context).textTheme.bodyMedium),
@@ -494,8 +503,20 @@ Future<void> _onBefriendTap(
           ),
         );
   if (chosen == null || !context.mounted) return;
+  if (await FirestorePetBuddyRepository.isMutedBetween(myUid, otherPet.ownerId)) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Paw buddy requests are blocked with this parent. You can unblock under Friends.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    return;
+  }
   try {
-    await FirestorePetBuddyRepository.sendBuddyRequest(
+    final sent = await FirestorePetBuddyRepository.sendBuddyRequest(
       fromUid: myUid,
       fromPetId: chosen.id,
       toPetId: otherPet.id,
@@ -503,6 +524,17 @@ Future<void> _onBefriendTap(
     );
     ref.invalidate(outgoingPetBuddyRequestsProvider);
     if (!context.mounted) return;
+    if (!sent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not send a new request (it may already be pending).',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -532,8 +564,11 @@ class _BefriendPetAction extends ConsumerWidget {
     final myPets = ref.watch(userPetsProvider);
     final buddiesAsync = ref.watch(buddyPetsForPetProvider(otherPet.id));
     final outgoingAsync = ref.watch(outgoingPetBuddyRequestsProvider);
+    final mutesAsync = ref.watch(petBuddyOwnerMutesProvider);
 
-    final loading = buddiesAsync.isLoading || outgoingAsync.isLoading;
+    final loading = buddiesAsync.isLoading ||
+        outgoingAsync.isLoading ||
+        mutesAsync.isLoading;
     if (loading) {
       return const SizedBox(
         width: 36,
@@ -542,6 +577,18 @@ class _BefriendPetAction extends ConsumerWidget {
           padding: EdgeInsets.all(6),
           child: CircularProgressIndicator(strokeWidth: 2),
         ),
+      );
+    }
+
+    final mutes = mutesAsync.value ?? [];
+    final mutedWithOwner = mutes.any(
+      (m) => m.otherUid(user.id) == otherPet.ownerId,
+    );
+    if (mutedWithOwner) {
+      return Chip(
+        avatar: Icon(Icons.block, size: 18, color: PawPartyColors.textSecondary),
+        label: const Text('Blocked'),
+        side: BorderSide(color: PawPartyColors.divider),
       );
     }
 
@@ -580,13 +627,18 @@ class _BefriendPetAction extends ConsumerWidget {
 }
 
 class _PetBuddiesStrip extends ConsumerWidget {
-  const _PetBuddiesStrip({required this.petId});
+  const _PetBuddiesStrip({
+    required this.profilePetId,
+    required this.isMine,
+  });
 
-  final String petId;
+  final String profilePetId;
+  final bool isMine;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(buddyPetsForPetProvider(petId));
+    final async = ref.watch(buddyPetsForPetProvider(profilePetId));
+    final myUid = ref.watch(authStateProvider).user?.id;
     return async.when(
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
@@ -611,52 +663,190 @@ class _PetBuddiesStrip extends ConsumerWidget {
                   return Material(
                     color: PawPartyColors.surface,
                     borderRadius: BorderRadius.circular(16),
-                    child: InkWell(
-                      onTap: () => context.push('/pet/${b.id}'),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: 88,
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        InkWell(
+                          onTap: () => context.push('/pet/${b.id}'),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: PawPartyColors.divider),
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: b.photoUrl != null &&
-                                        b.photoUrl!.isNotEmpty
-                                    ? PawFileOrNetworkImage(
-                                        path: b.photoUrl!,
-                                        width: 72,
-                                        height: 72,
-                                      )
-                                    : ColoredBox(
-                                        color: PawPartyColors.surfaceVariant,
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.pets,
-                                            color: PawPartyColors.primary,
+                          child: Container(
+                            width: 88,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: PawPartyColors.divider),
+                            ),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: b.photoUrl != null &&
+                                            b.photoUrl!.isNotEmpty
+                                        ? PawFileOrNetworkImage(
+                                            path: b.photoUrl!,
+                                            width: 72,
+                                            height: 72,
+                                          )
+                                        : ColoredBox(
+                                            color: PawPartyColors.surfaceVariant,
+                                            child: Center(
+                                              child: Icon(
+                                                Icons.pets,
+                                                color: PawPartyColors.primary,
+                                              ),
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                              ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  b.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              b.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                        if (isMine && myUid != null)
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: Material(
+                              color: PawPartyColors.surface.withValues(
+                                alpha: 0.95,
+                              ),
+                              shape: const CircleBorder(),
+                              clipBehavior: Clip.antiAlias,
+                              child: PopupMenuButton<String>(
+                                padding: EdgeInsets.zero,
+                                iconSize: 20,
+                                tooltip: 'Buddy options',
+                                itemBuilder: (ctx) => [
+                                  const PopupMenuItem(
+                                    value: 'remove',
+                                    child: Text('Remove paw buddy'),
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'block',
+                                    child: Text("Block parent's pets"),
+                                  ),
+                                ],
+                                onSelected: (value) async {
+                                  if (value == 'remove') {
+                                    final ok = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dCtx) => AlertDialog(
+                                        title: const Text('Remove paw buddy?'),
+                                        content: Text(
+                                          'Remove ${b.name} as a paw buddy for this pet? '
+                                          'You can send a new request later (unless blocked).',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(dCtx, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          FilledButton(
+                                            onPressed: () =>
+                                                Navigator.pop(dCtx, true),
+                                            child: const Text('Remove'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (ok != true || !context.mounted) return;
+                                    try {
+                                      await FirestorePetBuddyRepository
+                                          .removeBuddy(profilePetId, b.id);
+                                      _invalidatePetBuddyCaches(ref);
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              '${b.name} is no longer a paw buddy for this pet.',
+                                            ),
+                                            behavior:
+                                                SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text('Could not remove: $e'),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  } else if (value == 'block') {
+                                    final ok = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dCtx) => AlertDialog(
+                                        title: const Text('Block pet parent?'),
+                                        content: Text(
+                                          'This removes every paw buddy link between your pets '
+                                          "and ${b.name}'s parent's pets, and stops new buddy "
+                                          'requests in both directions until you unblock under Friends.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(dCtx, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          FilledButton(
+                                            onPressed: () =>
+                                                Navigator.pop(dCtx, true),
+                                            child: const Text('Block'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (ok != true || !context.mounted) return;
+                                    try {
+                                      await FirestorePetBuddyRepository
+                                          .muteBuddyOwners(
+                                        actingUid: myUid,
+                                        otherOwnerId: b.ownerId,
+                                      );
+                                      _invalidatePetBuddyCaches(ref);
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Paw buddy links with that parent are removed and blocked.',
+                                            ),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text('Could not block: $e'),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   );
                 },

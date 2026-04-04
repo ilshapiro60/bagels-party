@@ -67,6 +67,13 @@ class FirestoreProfileRepository {
     );
   }
 
+  static Future<void> decrementHostCount(String uid) async {
+    await _profiles.doc(uid).set(
+      {'hostCount': FieldValue.increment(-1)},
+      SetOptions(merge: true),
+    );
+  }
+
   static Future<void> updateLocation({
     required String uid,
     required double latitude,
@@ -83,19 +90,33 @@ class FirestoreProfileRepository {
     await _profiles.doc(uid).set(data, SetOptions(merge: true));
   }
 
-  static Future<void> syncAcceptedInvitesForInviter(String uid) async {
-    final qs = await _db
-        .collection('connectionInvites')
-        .where('fromUid', isEqualTo: uid)
+  /// Adds the other pet parent for every accepted paw-buddy request (both
+  /// directions). The accepter also gets an immediate [friendUids] write in
+  /// [FirestorePetBuddyRepository.acceptRequest]; this covers the requester.
+  static Future<void> syncFriendsFromAcceptedPetBuddyRequests(String uid) async {
+    final asSender = await _db
+        .collection('petBuddyRequests')
+        .where('fromOwnerId', isEqualTo: uid)
         .where('status', isEqualTo: 'accepted')
         .get();
-    final toUids = qs.docs
-        .map((d) => d.data()['toUid'] as String?)
-        .whereType<String>()
-        .toList();
-    if (toUids.isEmpty) return;
+    final asRecipient = await _db
+        .collection('petBuddyRequests')
+        .where('toOwnerId', isEqualTo: uid)
+        .where('status', isEqualTo: 'accepted')
+        .get();
+    final others = <String>{};
+    for (final d in asSender.docs) {
+      final to = d.data()['toOwnerId'];
+      if (to is String && to.isNotEmpty) others.add(to);
+    }
+    for (final d in asRecipient.docs) {
+      final from = d.data()['fromOwnerId'];
+      if (from is String && from.isNotEmpty) others.add(from);
+    }
+    others.remove(uid);
+    if (others.isEmpty) return;
     await _profiles.doc(uid).set(
-      {'friendUids': FieldValue.arrayUnion(toUids)},
+      {'friendUids': FieldValue.arrayUnion(others.toList())},
       SetOptions(merge: true),
     );
   }

@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/firebase_bootstrap.dart';
 import '../../config/theme.dart';
+import '../../models/meetup.dart';
 import '../../models/pet.dart';
 import '../../providers/app_providers.dart';
+import '../../services/firebase_storage_service.dart';
+import '../../services/firestore_meetup_repository.dart';
+import '../../services/firestore_profile_repository.dart';
 import '../../utils/pet_compatibility.dart';
 import '../../widgets/pet_card.dart';
 import '../../widgets/meetup_card.dart';
@@ -51,6 +56,8 @@ class HomeScreen extends ConsumerWidget {
                       child: MeetupCard(
                         meetup: meetups[index],
                         currentUserId: authState.user?.id,
+                        onHostDelete: (m) =>
+                            _confirmDeleteHostedParty(context, ref, m),
                       ),
                     ),
                   ),
@@ -101,9 +108,19 @@ class HomeScreen extends ConsumerWidget {
   ) {
     final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+      padding: const EdgeInsets.fromLTRB(16, 20, 24, 8),
       child: Row(
         children: [
+          IconButton.filledTonal(
+            onPressed: () => context.push('/friends'),
+            icon: const Icon(Icons.people_outline),
+            tooltip: 'Friends',
+            style: IconButton.styleFrom(
+              foregroundColor: PawPartyColors.primary,
+              backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
+            ),
+          ),
+          const SizedBox(width: 4),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -117,9 +134,12 @@ class HomeScreen extends ConsumerWidget {
                   children: [
                     Icon(Icons.location_on, size: 16, color: PawPartyColors.textSecondary),
                     const SizedBox(width: 4),
-                    Text(
-                      areaLabel,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    Expanded(
+                      child: Text(
+                        areaLabel,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -460,5 +480,92 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
     ).animate().fadeIn(delay: 400.ms, duration: 500.ms);
+  }
+}
+
+Future<void> _deletePartyLinkedMedia(WidgetRef ref, String meetupId) async {
+  final storage = FirebaseStorageService.instance;
+  final stories = ref.read(partyStoriesProvider);
+  final entries = ref.read(passportEntriesProvider);
+  final urls = <String>{};
+  for (final s in stories.where((s) => s.meetupId == meetupId)) {
+    urls.addAll(s.imagePaths);
+    urls.addAll(s.videoPaths);
+  }
+  for (final e in entries.where((e) => e.meetupId == meetupId)) {
+    urls.addAll(e.photoUrls);
+    urls.addAll(e.videoPaths);
+  }
+  for (final u in urls) {
+    await storage.deleteRemoteObjectIfPossible(u);
+  }
+}
+
+Future<void> _confirmDeleteHostedParty(
+  BuildContext context,
+  WidgetRef ref,
+  Meetup meetup,
+) async {
+  if (!isFirebaseInitialized) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Firebase is not configured — cannot delete the party.'),
+      ),
+    );
+    return;
+  }
+  final user = ref.read(authStateProvider).user;
+  if (user == null || user.id != meetup.hostId) return;
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete this party?'),
+      content: Text(
+        '“${meetup.title}” will be removed for everyone. '
+        'On this device, passport entries and party stories linked to this meetup are cleared, '
+        'and stored photos/videos for those items are deleted when possible.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: PawPartyColors.error),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+
+  try {
+    await FirestoreMeetupRepository.deleteMeetup(
+      meetupId: meetup.id,
+      actingHostId: user.id,
+    );
+    await FirestoreProfileRepository.decrementHostCount(user.id);
+    final nextCount = (user.hostCount - 1).clamp(0, 0x7fffffff);
+    ref.read(authStateProvider.notifier).updateUser(
+          user.copyWithHostCount(nextCount),
+        );
+
+    await _deletePartyLinkedMedia(ref, meetup.id);
+    ref.read(partyStoriesProvider.notifier).removeStoriesForMeetup(meetup.id);
+    ref.read(passportEntriesProvider.notifier).removeEntriesForMeetup(meetup.id);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('“${meetup.title}” was deleted.')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete party: $e')),
+      );
+    }
   }
 }

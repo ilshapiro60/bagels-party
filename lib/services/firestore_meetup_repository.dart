@@ -71,6 +71,21 @@ class FirestoreMeetupRepository {
     await _meetups.doc(meetup.id).set(meetupToFirestore(meetup));
   }
 
+  /// Removes the party document. Only the host may delete ([actingHostId]).
+  static Future<void> deleteMeetup({
+    required String meetupId,
+    required String actingHostId,
+  }) async {
+    final docRef = _meetups.doc(meetupId);
+    final snap = await docRef.get();
+    if (!snap.exists) return;
+    final data = snap.data();
+    if (data == null || data['hostId'] != actingHostId) {
+      throw StateError('Only the host can delete this party.');
+    }
+    await docRef.delete();
+  }
+
   /// Parties hosted by [hostId], newest first (by scheduled time).
   static Stream<List<Meetup>> watchHostedBy(String hostId) {
     return _meetups.where('hostId', isEqualTo: hostId).snapshots().map((snap) {

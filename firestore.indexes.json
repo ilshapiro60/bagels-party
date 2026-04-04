@@ -1,31 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "connectionInvites",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "toEmailLower", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "connectionInvites",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "fromUid", "order": "ASCENDING" },
-        { "fieldPath": "toEmailLower", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "connectionInvites",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "fromUid", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "petBuddyRequests",
       "queryScope": "COLLECTION",
       "fields": [
@@ -38,6 +13,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "fromOwnerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "petBuddyRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromOwnerId", "order": "ASCENDING" },
+        { "fieldPath": "toOwnerId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
     }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
+import '../../models/pet.dart';
 import '../../providers/app_providers.dart';
 import '../../services/approximate_location.dart';
 import '../../utils/pet_compatibility.dart';
@@ -38,6 +39,47 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
         alignment: 0.15,
       );
     }
+  }
+
+  void _showMapPetActionsSheet(Pet pet) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  pet.name,
+                  style: Theme.of(ctx).textTheme.titleLarge,
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.pets_outlined),
+                title: const Text('View profile'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  context.push('/pet/${pet.id}');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.view_list_outlined),
+                title: const Text('Show in list'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _scrollToPet(pet.id);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -98,7 +140,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               viewerProfile: authState.user,
               radiusMiles: _radiusMiles,
               showViewerLocation: showViewerOnMap,
-              onPetMarkerTapped: (pet) => _scrollToPet(pet.id),
+              onPetMarkerTapped: _showMapPetActionsSheet,
             ),
           ),
           Expanded(

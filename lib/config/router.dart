@@ -64,26 +64,30 @@ final appRouter = GoRouter(
       routes: [
         GoRoute(
           path: '/home',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: HomeScreen(),
+          pageBuilder: (context, state) => NoTransitionPage(
+            key: state.pageKey,
+            child: const HomeScreen(),
           ),
         ),
         GoRoute(
           path: '/discover',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: DiscoverScreen(),
+          pageBuilder: (context, state) => NoTransitionPage(
+            key: state.pageKey,
+            child: const DiscoverScreen(),
           ),
         ),
         GoRoute(
           path: '/passport',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: PassportScreen(),
+          pageBuilder: (context, state) => NoTransitionPage(
+            key: state.pageKey,
+            child: const PassportScreen(),
           ),
         ),
         GoRoute(
           path: '/profile',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: ProfileScreen(),
+          pageBuilder: (context, state) => NoTransitionPage(
+            key: state.pageKey,
+            child: const ProfileScreen(),
           ),
         ),
       ],

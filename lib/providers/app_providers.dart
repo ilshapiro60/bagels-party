@@ -11,6 +11,7 @@ import '../config/firebase_bootstrap.dart';
 import '../config/google_sign_in_init.dart';
 import '../firebase_options.dart';
 import '../models/meetup.dart';
+import '../models/pet_buddy_owner_mute.dart';
 import '../models/pet_buddy_request.dart';
 import '../models/party_story.dart';
 import '../models/passport_entry.dart';
@@ -18,6 +19,7 @@ import '../models/pet.dart';
 import '../models/user_profile.dart';
 import '../services/auth_persistence.dart';
 import '../services/device_location_service.dart';
+import '../services/firebase_user_mapper.dart';
 import '../services/firestore_meetup_repository.dart';
 import '../services/firestore_pet_buddy_repository.dart';
 import '../services/firestore_pet_repository.dart';
@@ -61,16 +63,119 @@ class AuthStateNotifier extends Notifier<AuthState> {
     if (!isFirebaseInitialized) return;
     final fbUser = FirebaseAuth.instance.currentUser;
     if (fbUser == null || fbUser.isAnonymous) return;
+
+    await _prepareGoogleSessionIfNeeded(fbUser);
+
     try {
-      await _applyAuthenticatedUser(fbUser).timeout(
-        const Duration(seconds: 25),
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+    } catch (e) {
+      debugPrint('Token refresh at restore: $e');
+    }
+    final liveUser = FirebaseAuth.instance.currentUser;
+    if (liveUser == null || liveUser.isAnonymous) return;
+
+    try {
+      await _applyAuthenticatedUser(liveUser).timeout(
+        const Duration(seconds: 35),
       );
     } on TimeoutException catch (e, st) {
       debugPrint('restoreSession timed out: $e\n$st');
-      await _clearStaleSessionAfterRestoreFailure();
+      await _applyRestoredSessionOfflineFallback(liveUser);
     } catch (e, st) {
       debugPrint('restoreSession failed: $e\n$st');
+      if (_isTransientRestoreFailure(e)) {
+        await _applyRestoredSessionOfflineFallback(liveUser);
+      } else {
+        await _clearStaleSessionAfterRestoreFailure();
+      }
+    }
+  }
+
+  /// Refreshes the Google Play layer so Firebase keeps a valid session on cold start.
+  Future<void> _prepareGoogleSessionIfNeeded(User u) async {
+    if (!_signedInWithGoogle(u)) return;
+    try {
+      await ensureGoogleSignInInitialized();
+      final lightweightFuture =
+          GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (lightweightFuture == null) return;
+      final account = await lightweightFuture;
+      final idToken = account?.authentication.idToken;
+      if (idToken == null || idToken.isEmpty) return;
+      await FirebaseAuth.instance.signInWithCredential(
+        GoogleAuthProvider.credential(idToken: idToken),
+      );
+    } catch (e, st) {
+      debugPrint('Google lightweight auth (non-fatal): $e\n$st');
+    }
+  }
+
+  bool _isTransientRestoreFailure(Object e) {
+    if (e is FirebaseException) {
+      return e.code == 'unavailable' ||
+          e.code == 'deadline-exceeded' ||
+          e.code == 'network-request-failed' ||
+          e.code == 'internal';
+    }
+    final s = e.toString().toLowerCase();
+    return s.contains('socketexception') ||
+        s.contains('failed host lookup') ||
+        s.contains('network') && s.contains('unavailable');
+  }
+
+  /// Keeps Firebase signed in and uses cached profile / Auth shell so users are
+  /// not forced through Google sign-in again after a slow or flaky Firestore read.
+  Future<void> _applyRestoredSessionOfflineFallback(User u) async {
+    try {
+      ref.read(userPetsProvider.notifier).clear();
+      UserProfile profile;
+      final cached = await ProfilePersistence.load(u.uid);
+      if (cached != null && cached.id == u.uid) {
+        profile = await ProfilePersistence.mergeWithSaved(cached);
+        final shell = userProfileFromFirebaseUser(u);
+        profile = profile.copyWithProfile(
+          email: shell.email,
+          displayName: shell.displayName.trim().isNotEmpty
+              ? shell.displayName
+              : profile.displayName,
+          photoUrl: shell.photoUrl ?? profile.photoUrl,
+        );
+      } else {
+        profile = userProfileFromFirebaseUser(u);
+        profile = await ProfilePersistence.mergeWithSaved(profile);
+      }
+      state = AuthState(
+        isAuthenticated: true,
+        isLoading: false,
+        user: profile,
+      );
+      unawaited(ProfilePersistence.save(profile));
+      await AuthPersistence.saveSession(
+        email: profile.email,
+        displayName: profile.displayName,
+        authMethod: _authMethodLabel(u),
+      );
+      authRouterRefresh.notifyAuthChanged();
+      try {
+        await ref.read(userPetsProvider.notifier).hydrate(profile.id);
+      } catch (e, st) {
+        debugPrint('Pet hydrate in offline fallback: $e\n$st');
+      }
+      Future.microtask(() => syncDeviceLocation());
+      unawaited(_retryFullProfileSync(u));
+    } catch (e, st) {
+      debugPrint('Offline session fallback failed: $e\n$st');
       await _clearStaleSessionAfterRestoreFailure();
+    }
+  }
+
+  Future<void> _retryFullProfileSync(User u) async {
+    await Future<void>.delayed(const Duration(seconds: 4));
+    if (FirebaseAuth.instance.currentUser?.uid != u.uid) return;
+    try {
+      await _applyAuthenticatedUser(FirebaseAuth.instance.currentUser!);
+    } catch (e) {
+      debugPrint('Background profile sync: $e');
     }
   }
 
@@ -96,7 +201,9 @@ class AuthStateNotifier extends Notifier<AuthState> {
       var p = await FirestoreProfileRepository.fetchOrCreate(u);
       p = await ProfilePersistence.mergeWithSaved(p);
       await FirestoreProfileRepository.saveProfile(p);
-      await FirestoreProfileRepository.syncAcceptedInvitesForInviter(u.uid);
+      await FirestoreProfileRepository.syncFriendsFromAcceptedPetBuddyRequests(
+        u.uid,
+      );
       final refreshed = await FirestoreProfileRepository.fetchProfile(u.uid);
       if (refreshed != null) {
         p = await ProfilePersistence.mergeWithSaved(refreshed);
@@ -490,6 +597,16 @@ final outgoingPetBuddyRequestsProvider =
   return FirestorePetBuddyRepository.watchOutgoingPending(uid);
 });
 
+/// Owner-level paw buddy blocks (see [FirestorePetBuddyRepository.muteBuddyOwners]).
+final petBuddyOwnerMutesProvider =
+    StreamProvider<List<PetBuddyOwnerMute>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) {
+    return Stream.value([]);
+  }
+  return FirestorePetBuddyRepository.watchMutesInvolving(uid);
+});
+
 final ownerProfileProvider =
     FutureProvider.family<UserProfile, String>((ref, ownerId) async {
   if (!isFirebaseInitialized) {
@@ -510,6 +627,10 @@ class PassportNotifier extends Notifier<List<PassportEntry>> {
 
   void addEntry(PassportEntry entry) {
     state = [entry, ...state];
+  }
+
+  void removeEntriesForMeetup(String meetupId) {
+    state = state.where((e) => e.meetupId != meetupId).toList();
   }
 }
 
@@ -537,5 +658,9 @@ class PartyStoriesNotifier extends Notifier<List<PartyStory>> {
 
   void addStory(PartyStory story) {
     state = [story, ...state];
+  }
+
+  void removeStoriesForMeetup(String meetupId) {
+    state = state.where((s) => s.meetupId != meetupId).toList();
   }
 }

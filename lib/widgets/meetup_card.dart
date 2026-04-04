@@ -6,11 +6,14 @@ import '../models/meetup.dart';
 class MeetupCard extends StatelessWidget {
   final Meetup meetup;
   final String? currentUserId;
+  /// When set, host sees a delete control to remove the party from Firestore.
+  final void Function(Meetup meetup)? onHostDelete;
 
   const MeetupCard({
     super.key,
     required this.meetup,
     this.currentUserId,
+    this.onHostDelete,
   });
 
   @override
@@ -61,6 +64,16 @@ class MeetupCard extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (isHosting && onHostDelete != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  onPressed: () => onHostDelete!(meetup),
+                  icon: Icon(Icons.delete_outline, size: 20, color: PawPartyColors.error),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  tooltip: 'Delete party',
+                ),
+              ],
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

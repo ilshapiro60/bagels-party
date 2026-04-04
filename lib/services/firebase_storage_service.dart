@@ -132,6 +132,26 @@ class FirebaseStorageService {
     );
   }
 
+  /// Deletes a file in Firebase Storage when [url] is an `https` download URL
+  /// or `gs://` reference. Ignores local paths and failures (logs only).
+  Future<void> deleteRemoteObjectIfPossible(String url) async {
+    if (!_ready) return;
+    final u = url.trim();
+    if (u.isEmpty) return;
+    if (!u.startsWith('http://') &&
+        !u.startsWith('https://') &&
+        !u.startsWith('gs://')) {
+      return;
+    }
+    try {
+      final ref = FirebaseStorage.instance.refFromURL(u);
+      await ref.delete();
+    } catch (e, st) {
+      debugPrint('Storage delete skipped ($u): $e');
+      debugPrint('$st');
+    }
+  }
+
   Future<String> uploadStoryMedia({
     required String localPath,
     required String storyId,

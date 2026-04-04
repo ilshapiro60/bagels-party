@@ -9,7 +9,7 @@ class UserProfile {
   final double? latitude;
   final double? longitude;
   final List<String> petIds;
-  /// UIDs of connected users (see Firestore `connectionInvites`).
+  /// UIDs of connected pet parents (paw buddy acceptances, etc.).
   final List<String> friendUids;
   final List<String> childAges;
   final int hostCount;
