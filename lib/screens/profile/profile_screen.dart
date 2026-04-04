@@ -49,7 +49,7 @@ class ProfileScreen extends ConsumerWidget {
               pets.map((pet) => _buildPetListItem(context, pet)).toList(),
             ),
             const SizedBox(height: 24),
-            _buildMenuItems(context, ref),
+            _buildMenuItems(context, ref, user),
             const SizedBox(height: 32),
           ],
         ),
@@ -369,7 +369,19 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMenuItems(BuildContext context, WidgetRef ref) {
+  Widget _buildMenuItems(
+    BuildContext context,
+    WidgetRef ref,
+    UserProfile user,
+  ) {
+    final ages = user.childAges
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final childrenSubtitle = ages.isEmpty
+        ? 'None on file'
+        : 'Ages: ${ages.join(', ')}';
+
     return Column(
       children: [
         _menuItem(
@@ -378,7 +390,12 @@ class ProfileScreen extends ConsumerWidget {
           'Connect with other pet parents',
           () => context.push('/friends'),
         ),
-        _menuItem(Icons.child_care, 'Children in Household', 'Ages: 6, 9', () {}),
+        _menuItem(
+          Icons.child_care,
+          'Children in Household',
+          childrenSubtitle,
+          () {},
+        ),
         _menuItem(Icons.notifications_outlined, 'Notifications', null, () {}),
         _menuItem(Icons.privacy_tip_outlined, 'Privacy & Safety', null, () {}),
         _menuItem(Icons.help_outline, 'Help & Support', null, () {}),
