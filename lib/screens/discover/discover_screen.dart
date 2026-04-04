@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../providers/app_providers.dart';
 import '../../services/approximate_location.dart';
-import '../../services/mock_data.dart';
+import '../../utils/pet_compatibility.dart';
 import '../../widgets/nearby_pets_map.dart';
 import '../../widgets/pet_card.dart';
 
@@ -108,7 +108,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 final pet = visiblePets[index];
                 _cardKeys[pet.id] ??= GlobalKey();
                 final compatibility = primaryPet != null
-                    ? MockData.calculateCompatibility(primaryPet, pet)
+                    ? calculatePetCompatibility(primaryPet, pet)
                     : 0.0;
                 return Padding(
                   key: _cardKeys[pet.id],

@@ -372,6 +372,12 @@ class ProfileScreen extends ConsumerWidget {
   Widget _buildMenuItems(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
+        _menuItem(
+          Icons.group_add_outlined,
+          'Friends & invites',
+          'Connect with other pet parents',
+          () => context.push('/friends'),
+        ),
         _menuItem(Icons.child_care, 'Children in Household', 'Ages: 6, 9', () {}),
         _menuItem(Icons.notifications_outlined, 'Notifications', null, () {}),
         _menuItem(Icons.privacy_tip_outlined, 'Privacy & Safety', null, () {}),

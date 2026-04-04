@@ -1,16 +1,23 @@
 import 'dart:async' show unawaited;
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
 import '../config/auth_router_refresh.dart';
+import '../config/firebase_bootstrap.dart';
+import '../config/google_sign_in_init.dart';
+import '../firebase_options.dart';
+import '../models/meetup.dart';
+import '../models/party_story.dart';
+import '../models/passport_entry.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
-import '../models/meetup.dart';
-import '../models/passport_entry.dart';
-import '../models/party_story.dart';
 import '../services/auth_persistence.dart';
 import '../services/device_location_service.dart';
-import '../services/mock_data.dart';
-import '../services/pet_persistence.dart';
+import '../services/firestore_pet_repository.dart';
+import '../services/firestore_profile_repository.dart';
+import '../services/firestore_retry.dart';
 import '../services/profile_persistence.dart';
 
 final authStateProvider = NotifierProvider<AuthStateNotifier, AuthState>(
@@ -46,88 +53,159 @@ class AuthStateNotifier extends Notifier<AuthState> {
   AuthState build() => const AuthState();
 
   Future<void> restoreSession() async {
-    final data = await AuthPersistence.loadSession();
-    if (data == null) return;
-    final base = MockData.currentUser.copyWith(
-      email: data.email,
-      displayName: data.displayName,
-    );
-    final user = await ProfilePersistence.mergeWithSaved(base);
+    if (!isFirebaseInitialized) return;
+    final fbUser = FirebaseAuth.instance.currentUser;
+    if (fbUser == null || fbUser.isAnonymous) return;
+    await _applyAuthenticatedUser(fbUser);
+  }
+
+  Future<void> _applyAuthenticatedUser(User u) async {
+    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
+      state = state.copyWith(isLoading: false);
+      throw StateError('Firebase is not configured.');
+    }
+    ref.read(userPetsProvider.notifier).clear();
+    final profile = await firestoreRetry(() async {
+      var p = await FirestoreProfileRepository.fetchOrCreate(u);
+      p = await ProfilePersistence.mergeWithSaved(p);
+      await FirestoreProfileRepository.saveProfile(p);
+      await FirestoreProfileRepository.syncAcceptedInvitesForInviter(u.uid);
+      final refreshed = await FirestoreProfileRepository.fetchProfile(u.uid);
+      if (refreshed != null) {
+        p = await ProfilePersistence.mergeWithSaved(refreshed);
+        await FirestoreProfileRepository.saveProfile(p);
+      }
+      await ref.read(userPetsProvider.notifier).hydrate(p.id);
+      return p;
+    });
     state = AuthState(
       isAuthenticated: true,
       isLoading: false,
-      user: user,
+      user: profile,
+    );
+    await AuthPersistence.saveSession(
+      email: profile.email,
+      displayName: profile.displayName,
+      authMethod: _authMethodLabel(u),
     );
     authRouterRefresh.notifyAuthChanged();
-    await ref.read(userPetsProvider.notifier).hydrate(state.user?.id);
-    // GPS + reverse geocode can take seconds; don't block first frame / session ready.
     Future.microtask(() => syncDeviceLocation());
   }
 
   Future<void> signIn(String email, String password) async {
+    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
+      throw StateError('Firebase is not configured.');
+    }
     state = state.copyWith(isLoading: true);
-    await Future.delayed(const Duration(seconds: 1));
-    final trimmed = email.trim();
-    final user = await ProfilePersistence.mergeWithSaved(
-      MockData.currentUser.copyWith(email: trimmed),
-    );
-    state = AuthState(
-      isAuthenticated: true,
-      isLoading: false,
-      user: user,
-    );
-    await AuthPersistence.saveSession(
-      email: state.user!.email,
-      displayName: state.user!.displayName,
-      authMethod: 'email',
-    );
-    authRouterRefresh.notifyAuthChanged();
-    await ref.read(userPetsProvider.notifier).hydrate(state.user?.id);
-    Future.microtask(() => syncDeviceLocation());
+    try {
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      await _applyAuthenticatedUser(cred.user!);
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
   }
 
   Future<void> signUp(String name, String email, String password) async {
+    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
+      throw StateError('Firebase is not configured.');
+    }
     state = state.copyWith(isLoading: true);
-    await Future.delayed(const Duration(seconds: 1));
-    final user = await ProfilePersistence.mergeWithSaved(
-      MockData.currentUser.copyWith(displayName: name, email: email.trim()),
-    );
-    state = AuthState(
-      isAuthenticated: true,
-      isLoading: false,
-      user: user,
-    );
-    await AuthPersistence.saveSession(
-      email: state.user!.email,
-      displayName: state.user!.displayName,
-      authMethod: 'email',
-    );
-    authRouterRefresh.notifyAuthChanged();
-    await ref.read(userPetsProvider.notifier).hydrate(state.user?.id);
-    Future.microtask(() => syncDeviceLocation());
+    try {
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final trimmedName = name.trim();
+      if (trimmedName.isNotEmpty) {
+        await cred.user!.updateDisplayName(trimmedName);
+        await cred.user!.reload();
+      }
+      final u = FirebaseAuth.instance.currentUser!;
+      await _applyAuthenticatedUser(u);
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
   }
 
-  /// Mock Google / Apple — same as email sign-in for now, but tagged for persistence.
-  Future<void> signInWithSocial(String method) async {
+  /// Google uses Firebase + Google Sign-In. Apple is not implemented.
+  Future<bool> signInWithSocial(String method) async {
     state = state.copyWith(isLoading: true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    final user = await ProfilePersistence.mergeWithSaved(MockData.currentUser);
-    state = AuthState(
-      isAuthenticated: true,
-      isLoading: false,
-      user: user,
-    );
-    await AuthPersistence.saveSession(
-      email: state.user!.email,
-      displayName: state.user!.displayName,
-      authMethod: method,
-    );
-    authRouterRefresh.notifyAuthChanged();
-    await ref.read(userPetsProvider.notifier).hydrate(state.user?.id);
-    Future.microtask(() => syncDeviceLocation());
+    final key = method.toLowerCase();
+    if (key == 'google') {
+      try {
+        return await _signInWithGoogle();
+      } catch (_) {
+        state = state.copyWith(isLoading: false);
+        rethrow;
+      }
+    }
+    if (key == 'apple') {
+      state = state.copyWith(isLoading: false);
+      throw UnsupportedError(
+        'Apple Sign-In is not set up yet. Use Google or email.',
+      );
+    }
+    state = state.copyWith(isLoading: false);
+    throw UnsupportedError('Unknown sign-in method: $method');
   }
 
-  /// Requests permission and updates [AuthState.user] lat/lng + neighborhood label when possible.
+  Future<bool> _signInWithGoogle() async {
+    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
+      state = state.copyWith(isLoading: false);
+      throw StateError(
+        'Firebase is not configured. Run `flutterfire configure`.',
+      );
+    }
+
+    await ensureGoogleSignInInitialized();
+
+    final prior = FirebaseAuth.instance.currentUser;
+    if (prior != null && prior.isAnonymous) {
+      await FirebaseAuth.instance.signOut();
+    }
+
+    late final GoogleSignInAccount account;
+    try {
+      account = await GoogleSignIn.instance.authenticate(
+        scopeHint: const ['email', 'openid'],
+      );
+    } on GoogleSignInException catch (e) {
+      state = state.copyWith(isLoading: false);
+      if (e.code == GoogleSignInExceptionCode.canceled ||
+          e.code == GoogleSignInExceptionCode.interrupted) {
+        return false;
+      }
+      rethrow;
+    }
+
+    final idToken = account.authentication.idToken;
+    if (idToken == null || idToken.isEmpty) {
+      state = state.copyWith(isLoading: false);
+      throw StateError(
+        'Google Sign-In did not return an ID token. Check Firebase Web client '
+        'ID (serverClientId) and iOS URL scheme / GoogleService-Info.plist.',
+      );
+    }
+
+    try {
+      await FirebaseAuth.instance.signInWithCredential(
+        GoogleAuthProvider.credential(idToken: idToken),
+      );
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
+
+    final fbUser = FirebaseAuth.instance.currentUser!;
+    await _applyAuthenticatedUser(fbUser);
+    return true;
+  }
+
   Future<bool> syncDeviceLocation() async {
     if (!state.isAuthenticated || state.user == null) return false;
     final pos = await DeviceLocationService.tryGetCurrentPosition();
@@ -146,10 +224,28 @@ class AuthStateNotifier extends Notifier<AuthState> {
     );
     state = state.copyWith(user: updated);
     unawaited(ProfilePersistence.save(updated));
+    if (isFirebaseInitialized) {
+      unawaited(
+        FirestoreProfileRepository.updateLocation(
+          uid: u.id,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          neighborhood: hood ?? u.neighborhood,
+        ),
+      );
+    }
     return true;
   }
 
   Future<void> signOut() async {
+    if (isFirebaseInitialized) {
+      final u = FirebaseAuth.instance.currentUser;
+      if (u != null && _signedInWithGoogle(u)) {
+        await ensureGoogleSignInInitialized();
+        await GoogleSignIn.instance.signOut();
+      }
+      await FirebaseAuth.instance.signOut();
+    }
     await AuthPersistence.clear();
     state = const AuthState();
     ref.read(userPetsProvider.notifier).clear();
@@ -160,9 +256,11 @@ class AuthStateNotifier extends Notifier<AuthState> {
     if (!state.isAuthenticated) return;
     state = state.copyWith(user: user);
     unawaited(ProfilePersistence.save(user));
+    if (isFirebaseInitialized) {
+      unawaited(FirestoreProfileRepository.saveProfile(user));
+    }
   }
 
-  /// Keeps [AuthPersistence] in sync so the next cold start doesn’t restore an old display name.
   Future<void> updateDisplayName(String displayName) async {
     if (!state.isAuthenticated || state.user == null) return;
     final trimmed = displayName.trim();
@@ -178,6 +276,19 @@ class AuthStateNotifier extends Notifier<AuthState> {
   }
 }
 
+String _authMethodLabel(User u) {
+  if (u.providerData.any((p) => p.providerId == 'google.com')) {
+    return 'Google';
+  }
+  if (u.providerData.any((p) => p.providerId == 'apple.com')) {
+    return 'Apple';
+  }
+  return 'email';
+}
+
+bool _signedInWithGoogle(User u) =>
+    u.providerData.any((p) => p.providerId == 'google.com');
+
 extension UserProfileCopyWith on UserProfile {
   UserProfile copyWith({
     String? displayName,
@@ -189,6 +300,7 @@ extension UserProfileCopyWith on UserProfile {
     double? latitude,
     double? longitude,
     List<String>? petIds,
+    List<String>? friendUids,
     String? bio,
   }) {
     return UserProfile(
@@ -204,6 +316,7 @@ extension UserProfileCopyWith on UserProfile {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       petIds: petIds ?? this.petIds,
+      friendUids: friendUids ?? this.friendUids,
       childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
@@ -225,47 +338,71 @@ class PetsNotifier extends Notifier<List<Pet>> {
   @override
   List<Pet> build() => [];
 
-  /// Load saved pets for [userId], or demo pets for that owner when nothing stored yet.
   Future<void> hydrate(String? userId) async {
-    if (userId == null) {
+    if (userId == null || !isFirebaseInitialized) {
       state = [];
       return;
     }
-    state = await PetPersistence.load(userId);
+    state = await FirestorePetRepository.loadForUser(userId);
   }
 
   void clear() {
     state = [];
   }
 
-  Future<void> _persist() async {
-    final userId = ref.read(authStateProvider).user?.id;
-    if (userId == null) return;
-    await PetPersistence.save(userId, state);
-  }
-
   Future<void> addPet(Pet pet) async {
-    state = [...state, pet];
-    await _persist();
+    final uid = ref.read(authStateProvider).user?.id;
+    if (uid == null) return;
+    final owner = ref.read(authStateProvider).user;
+    final anchored = FirestorePetRepository.withOwnerAnchor(pet, owner);
+    await FirestorePetRepository.upsert(uid, anchored);
+    state = [...state, anchored];
   }
 
   Future<void> removePet(String petId) async {
+    final uid = ref.read(authStateProvider).user?.id;
+    if (uid == null) return;
+    await FirestorePetRepository.delete(uid, petId);
     state = state.where((p) => p.id != petId).toList();
-    await _persist();
   }
 
   Future<void> updatePet(Pet pet) async {
-    state = state.map((p) => p.id == pet.id ? pet : p).toList();
-    await _persist();
+    final uid = ref.read(authStateProvider).user?.id;
+    if (uid == null) return;
+    final owner = ref.read(authStateProvider).user;
+    final anchored = FirestorePetRepository.withOwnerAnchor(pet, owner);
+    await FirestorePetRepository.upsert(uid, anchored);
+    state = state.map((p) => p.id == pet.id ? anchored : p).toList();
   }
 }
 
+final communityPetsStreamProvider = StreamProvider<List<Pet>>((ref) {
+  final auth = ref.watch(authStateProvider);
+  if (!isFirebaseInitialized || !auth.isAuthenticated || auth.user == null) {
+    return Stream.value([]);
+  }
+  return FirestorePetRepository.watchCommunityPets(
+    excludeOwnerId: auth.user!.id,
+  );
+});
+
+/// Other users' pets (live). Empty until Firestore has data.
 final nearbyPetsProvider = Provider<List<Pet>>((ref) {
-  return MockData.nearbyPets;
+  final async = ref.watch(communityPetsStreamProvider);
+  return async.value ?? [];
 });
 
 final upcomingMeetupsProvider = Provider<List<Meetup>>((ref) {
-  return MockData.upcomingMeetups;
+  return const [];
+});
+
+final ownerProfileProvider =
+    FutureProvider.family<UserProfile, String>((ref, ownerId) async {
+  if (!isFirebaseInitialized) {
+    return UserProfile.placeholderNeighbor(ownerId);
+  }
+  final p = await FirestoreProfileRepository.fetchProfile(ownerId);
+  return p ?? UserProfile.placeholderNeighbor(ownerId);
 });
 
 final passportEntriesProvider =
@@ -275,7 +412,7 @@ final passportEntriesProvider =
 
 class PassportNotifier extends Notifier<List<PassportEntry>> {
   @override
-  List<PassportEntry> build() => MockData.passportEntries;
+  List<PassportEntry> build() => [];
 
   void addEntry(PassportEntry entry) {
     state = [entry, ...state];
@@ -302,7 +439,7 @@ final partyStoriesProvider =
 
 class PartyStoriesNotifier extends Notifier<List<PartyStory>> {
   @override
-  List<PartyStory> build() => MockData.partyStories;
+  List<PartyStory> build() => [];
 
   void addStory(PartyStory story) {
     state = [story, ...state];

@@ -60,7 +60,7 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
     };
 
     for (final pet in widget.pets) {
-      final pt = ownerApproximateArea(pet.ownerId, viewer: widget.viewerProfile);
+      final pt = ownerApproximateArea(pet, viewer: widget.viewerProfile);
       final pos = LatLng(pt.latitude, pt.longitude);
       final hue = switch (pet.type) {
         'Dog' => BitmapDescriptor.hueOrange,

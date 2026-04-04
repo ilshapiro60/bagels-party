@@ -89,6 +89,13 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
   }
 
   Future<void> _savePet() async {
+    final user = ref.read(authStateProvider).user;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in again to add a pet.')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       final petId = const Uuid().v4();
@@ -117,7 +124,7 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
 
       final pet = Pet(
         id: petId,
-        ownerId: ref.read(authStateProvider).user?.id ?? 'user_1',
+        ownerId: user.id,
         name: _nameController.text.trim(),
         type: _selectedType,
         breed: _breedController.text.trim().isEmpty ? null : _breedController.text.trim(),

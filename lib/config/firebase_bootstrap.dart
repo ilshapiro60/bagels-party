@@ -1,11 +1,11 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import '../firebase_options.dart';
 
-/// Initializes Firebase and signs in anonymously so Storage rules can use
-/// [request.auth.uid]. No-op when [DefaultFirebaseOptions.isConfigured] is false.
+/// Initializes Firebase. Storage and other services use [FirebaseAuth] after
+/// the user signs in (e.g. Google). No-op when [DefaultFirebaseOptions.isConfigured]
+/// is false.
 Future<void> bootstrapFirebase() async {
   if (!DefaultFirebaseOptions.isConfigured) {
     debugPrint(
@@ -19,10 +19,7 @@ Future<void> bootstrapFirebase() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-    if (FirebaseAuth.instance.currentUser == null) {
-      await FirebaseAuth.instance.signInAnonymously();
-    }
-    debugPrint('Firebase ready (anonymous uid: ${FirebaseAuth.instance.currentUser?.uid})');
+    debugPrint('Firebase ready');
   } catch (e, st) {
     debugPrint('Firebase bootstrap failed: $e');
     debugPrint('$st');

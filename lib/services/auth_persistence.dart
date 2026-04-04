@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Persists mock sign-in (email / Google / Apple) so cold starts skip the login form.
+/// Persists last known display name / method for UI; session is restored from
+/// [FirebaseAuth] when the app starts.
 class AuthPersistence {
   AuthPersistence._();
 

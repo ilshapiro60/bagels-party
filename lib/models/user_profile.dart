@@ -9,6 +9,8 @@ class UserProfile {
   final double? latitude;
   final double? longitude;
   final List<String> petIds;
+  /// UIDs of connected users (see Firestore `connectionInvites`).
+  final List<String> friendUids;
   final List<String> childAges;
   final int hostCount;
   final int attendCount;
@@ -30,6 +32,7 @@ class UserProfile {
     this.latitude,
     this.longitude,
     this.petIds = const [],
+    this.friendUids = const [],
     this.childAges = const [],
     this.hostCount = 0,
     this.attendCount = 0,
@@ -56,6 +59,7 @@ class UserProfile {
       'latitude': latitude,
       'longitude': longitude,
       'petIds': petIds,
+      'friendUids': friendUids,
       'childAges': childAges,
       'hostCount': hostCount,
       'attendCount': attendCount,
@@ -82,6 +86,7 @@ class UserProfile {
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
       petIds: List<String>.from(map['petIds'] ?? []),
+      friendUids: List<String>.from(map['friendUids'] ?? []),
       childAges: List<String>.from(map['childAges'] ?? []),
       hostCount: map['hostCount'] as int? ?? 0,
       attendCount: map['attendCount'] as int? ?? 0,
@@ -113,6 +118,7 @@ class UserProfile {
       latitude: latitude,
       longitude: longitude,
       petIds: petIds,
+      friendUids: friendUids,
       childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
@@ -149,6 +155,7 @@ class UserProfile {
       latitude: latitude,
       longitude: longitude,
       petIds: petIds,
+      friendUids: friendUids,
       childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
@@ -160,6 +167,20 @@ class UserProfile {
       bio: updateBio
           ? (bio == null || bio.isEmpty ? null : bio)
           : this.bio,
+    );
+  }
+
+  /// Minimal profile when another user has not written their Firestore doc yet.
+  factory UserProfile.placeholderNeighbor(String ownerId) {
+    return UserProfile(
+      id: ownerId,
+      email: '',
+      displayName: 'Pet parent',
+      neighborhood: 'Nearby',
+      petIds: const [],
+      friendUids: const [],
+      childAges: const [],
+      createdAt: DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
 }

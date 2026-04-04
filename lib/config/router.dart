@@ -15,6 +15,7 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/stories/party_stories_screen.dart';
 import '../screens/stories/add_story_screen.dart';
 import '../screens/pet/pet_detail_screen.dart';
+import '../screens/friends/friends_screen.dart';
 import '../widgets/nav_shell.dart';
 import 'auth_router_refresh.dart';
 
@@ -107,6 +108,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/add-story',
       builder: (context, state) => const AddStoryScreen(),
+    ),
+    GoRoute(
+      path: '/friends',
+      builder: (context, state) => const FriendsScreen(),
     ),
   ],
 );

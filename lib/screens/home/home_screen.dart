@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
+import '../../models/pet.dart';
 import '../../providers/app_providers.dart';
-import '../../services/mock_data.dart';
+import '../../utils/pet_compatibility.dart';
 import '../../widgets/pet_card.dart';
 import '../../widgets/meetup_card.dart';
 import '../../widgets/paw_file_image.dart';
@@ -77,7 +78,7 @@ class HomeScreen extends ConsumerWidget {
               child: _buildSectionHeader(context, 'Nearby Matches', Icons.favorite),
             ),
             SliverToBoxAdapter(
-              child: _buildNearbyMatches(context, pets),
+              child: _buildNearbyMatches(context, ref, pets),
             ),
             SliverToBoxAdapter(
               child: _buildNeighborhoodBanner(context, areaLabel),
@@ -386,8 +387,12 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildNearbyMatches(BuildContext context, userPets) {
-    final nearbyPets = MockData.nearbyPets.take(3).toList();
+  Widget _buildNearbyMatches(
+    BuildContext context,
+    WidgetRef ref,
+    List<Pet> userPets,
+  ) {
+    final nearbyPets = ref.watch(nearbyPetsProvider).take(3).toList();
     final primaryPet = userPets.isNotEmpty ? userPets.first : null;
 
     return Padding(
@@ -395,7 +400,7 @@ class HomeScreen extends ConsumerWidget {
       child: Column(
         children: nearbyPets.map((pet) {
           final compatibility = primaryPet != null
-              ? MockData.calculateCompatibility(primaryPet, pet)
+              ? calculatePetCompatibility(primaryPet, pet)
               : 0.0;
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),

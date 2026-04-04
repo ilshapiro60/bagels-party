@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Collection-group queries (e.g. collectionGroup('pets')) require a path
+    // pattern that matches documents in any subcollection named "pets".
+    match /{path=**}/pets/{petId} {
+      allow read: if request.auth != null;
+    }
+
+    match /profiles/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+
+      match /pets/{petId} {
+        allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    match /connectionInvites/{inviteId} {
+      allow create: if request.auth != null
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      allow read: if request.auth != null
+        && (resource.data.fromUid == request.auth.uid
+            || resource.data.toEmailLower == request.auth.token.email.lower());
+
+      allow update: if request.auth != null
+        && resource.data.toEmailLower == request.auth.token.email.lower()
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['accepted', 'declined'];
+    }
+  }
+}

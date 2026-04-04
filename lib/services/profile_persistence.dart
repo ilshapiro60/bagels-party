@@ -28,15 +28,44 @@ class ProfilePersistence {
     }
   }
 
-  /// Apply saved avatar/gallery/location on top of [base] (session email/name win).
-  static Future<UserProfile> mergeWithSaved(
-    UserProfile base,
-  ) async {
+  /// Apply saved device-only fields on top of [base]. Firestore / Auth are
+  /// authoritative for identity, [petIds], friends, and stats — the old
+  /// implementation reused the entire cached profile (only swapping email
+  /// and displayName), which could leak another user's pets or photos if prefs
+  /// were stale or the stored JSON did not match the signed-in UID.
+  static Future<UserProfile> mergeWithSaved(UserProfile base) async {
     final saved = await load(base.id);
     if (saved == null) return base;
-    return saved.copyWithProfile(
-      email: base.email,
-      displayName: base.displayName,
+    final savedEmail = saved.email.trim().toLowerCase();
+    final baseEmail = base.email.trim().toLowerCase();
+    if (savedEmail.isNotEmpty &&
+        baseEmail.isNotEmpty &&
+        savedEmail != baseEmail) {
+      return base;
+    }
+    final photo = (saved.photoUrl != null && saved.photoUrl!.isNotEmpty)
+        ? saved.photoUrl
+        : base.photoUrl;
+    final hood = (saved.neighborhood != null && saved.neighborhood!.isNotEmpty)
+        ? saved.neighborhood
+        : base.neighborhood;
+    var merged = base.copyWithProfile(
+      photoUrl: photo,
+      ownerGalleryImagePaths: saved.ownerGalleryImagePaths.isNotEmpty
+          ? saved.ownerGalleryImagePaths
+          : null,
+      ownerGalleryVideoPaths: saved.ownerGalleryVideoPaths.isNotEmpty
+          ? saved.ownerGalleryVideoPaths
+          : null,
+      neighborhood: hood,
     );
+    if (saved.latitude != null && saved.longitude != null) {
+      merged = merged.copyWithCoordinates(
+        latitude: saved.latitude!,
+        longitude: saved.longitude!,
+        neighborhood: hood ?? merged.neighborhood,
+      );
+    }
+    return merged;
   }
 }

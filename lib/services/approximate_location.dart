@@ -2,7 +2,10 @@ import 'dart:math' as math;
 
 import '../models/pet.dart';
 import '../models/user_profile.dart';
-import 'mock_data.dart';
+
+/// Default map anchor when the user has not shared location yet (NYC area).
+const double kDefaultMapLat = 40.7128;
+const double kDefaultMapLng = -74.0060;
 
 /// Public map points are intentionally offset from real coordinates so the
 /// map shows an **approximate area**, not a precise home location.
@@ -43,26 +46,30 @@ double haversineMeters(GeoPoint a, GeoPoint b) {
 }
 
 GeoPoint viewerMapPoint(UserProfile? user) {
-  final u = user ?? MockData.currentUser;
-  final lat = u.latitude ?? MockData.currentUser.latitude!;
-  final lng = u.longitude ?? MockData.currentUser.longitude!;
+  final lat = user?.latitude ?? kDefaultMapLat;
+  final lng = user?.longitude ?? kDefaultMapLng;
+  final id = user?.id ?? 'guest';
   return fuzzyPublicLocation(
     anchorLat: lat,
     anchorLng: lng,
-    stableKey: 'pawparty:viewer:${u.id}',
+    stableKey: 'pawparty:viewer:$id',
   );
 }
 
-/// Mock pet pins are fuzzed around the [viewer]'s anchor so Discover works at the device's location.
-/// (Production would use each owner's real approximate area from the backend.)
-GeoPoint ownerApproximateArea(String ownerId, {UserProfile? viewer}) {
-  final u = viewer ?? MockData.currentUser;
-  final lat = u.latitude ?? MockData.currentUser.latitude!;
-  final lng = u.longitude ?? MockData.currentUser.longitude!;
+GeoPoint ownerApproximateArea(Pet pet, {UserProfile? viewer}) {
+  if (pet.ownerApproxLat != null && pet.ownerApproxLng != null) {
+    return fuzzyPublicLocation(
+      anchorLat: pet.ownerApproxLat!,
+      anchorLng: pet.ownerApproxLng!,
+      stableKey: 'pawparty:owner:${pet.ownerId}',
+    );
+  }
+  final lat = viewer?.latitude ?? kDefaultMapLat;
+  final lng = viewer?.longitude ?? kDefaultMapLng;
   return fuzzyPublicLocation(
     anchorLat: lat,
     anchorLng: lng,
-    stableKey: 'pawparty:owner:$ownerId',
+    stableKey: 'pawparty:owner:${pet.ownerId}',
   );
 }
 
@@ -75,7 +82,7 @@ List<Pet> petsWithinRadiusMiles(
   final you = viewerMapPoint(viewer);
   final maxM = radiusMiles * 1609.34;
   return pets.where((p) {
-    final them = ownerApproximateArea(p.ownerId, viewer: viewer);
+    final them = ownerApproximateArea(p, viewer: viewer);
     return haversineMeters(you, them) <= maxM;
   }).toList();
 }

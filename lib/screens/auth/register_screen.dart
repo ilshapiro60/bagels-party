@@ -32,12 +32,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
-    await ref.read(authStateProvider.notifier).signUp(
-          _nameController.text.trim(),
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
-    if (mounted) context.go('/onboarding');
+    try {
+      await ref.read(authStateProvider.notifier).signUp(
+            _nameController.text.trim(),
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
+      if (mounted) context.go('/onboarding');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create account: $e')),
+      );
+    }
   }
 
   @override

@@ -25,6 +25,9 @@ class Pet {
   final DateTime createdAt;
   final int meetupCount;
   final double averageRating;
+  /// Owner's last known coords when the pet was saved (for Discover map fuzzing).
+  final double? ownerApproxLat;
+  final double? ownerApproxLng;
 
   const Pet({
     required this.id,
@@ -51,6 +54,8 @@ class Pet {
     required this.createdAt,
     this.meetupCount = 0,
     this.averageRating = 0.0,
+    this.ownerApproxLat,
+    this.ownerApproxLng,
   });
 
   String get ageDisplay {
@@ -132,6 +137,8 @@ class Pet {
       createdAt: DateTime.parse(map['createdAt'] as String),
       meetupCount: map['meetupCount'] as int? ?? 0,
       averageRating: (map['averageRating'] as num?)?.toDouble() ?? 0.0,
+      ownerApproxLat: (map['ownerApproxLat'] as num?)?.toDouble(),
+      ownerApproxLng: (map['ownerApproxLng'] as num?)?.toDouble(),
     );
   }
 
@@ -157,6 +164,8 @@ class Pet {
     bool? isVaccinated,
     int? meetupCount,
     double? averageRating,
+    double? ownerApproxLat,
+    double? ownerApproxLng,
   }) {
     return Pet(
       id: id,
@@ -183,6 +192,8 @@ class Pet {
       createdAt: createdAt,
       meetupCount: meetupCount ?? this.meetupCount,
       averageRating: averageRating ?? this.averageRating,
+      ownerApproxLat: ownerApproxLat ?? this.ownerApproxLat,
+      ownerApproxLng: ownerApproxLng ?? this.ownerApproxLng,
     );
   }
 }

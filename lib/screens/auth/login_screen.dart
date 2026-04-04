@@ -29,11 +29,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _handleSignIn() async {
     if (!_formKey.currentState!.validate()) return;
-    await ref.read(authStateProvider.notifier).signIn(
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
-    if (mounted) context.go('/home');
+    try {
+      await ref.read(authStateProvider.notifier).signIn(
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
+      if (mounted) context.go('/home');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign-in failed: $e')),
+      );
+    }
   }
 
   @override
@@ -262,8 +269,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleSocial(String method) async {
-    await ref.read(authStateProvider.notifier).signInWithSocial(method);
-    if (mounted) context.go('/home');
+    try {
+      final ok =
+          await ref.read(authStateProvider.notifier).signInWithSocial(method);
+      if (!mounted) return;
+      if (ok) context.go('/home');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign-in failed: $e')),
+      );
+    }
   }
 
   Widget _socialButton(IconData icon, String label, VoidCallback onPressed) {

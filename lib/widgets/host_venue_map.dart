@@ -4,7 +4,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../config/map_platform.dart';
 import '../config/theme.dart';
 import '../services/approximate_location.dart';
-import '../services/mock_data.dart';
 import 'map_unavailable_placeholder.dart';
 
 /// Preview of what guests see before accepting: a fuzzy point near the
@@ -27,10 +26,8 @@ class HostVenueMap extends StatelessWidget {
       return MapUnavailablePlaceholder(height: height);
     }
 
-    final anchorLat =
-        anchorLatitude ?? MockData.currentUser.latitude!;
-    final anchorLng =
-        anchorLongitude ?? MockData.currentUser.longitude!;
+    final anchorLat = anchorLatitude ?? kDefaultMapLat;
+    final anchorLng = anchorLongitude ?? kDefaultMapLng;
     final venue = fuzzyPublicLocation(
       anchorLat: anchorLat,
       anchorLng: anchorLng,

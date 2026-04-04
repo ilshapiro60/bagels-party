@@ -8,7 +8,6 @@ import '../../models/pet.dart';
 import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
-import '../../services/mock_data.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/fullscreen_video.dart';
 import '../../widgets/paw_file_image.dart';
@@ -41,7 +40,11 @@ class PetDetailScreen extends ConsumerWidget {
 
     final user = ref.watch(authStateProvider).user;
     final isMine = user != null && pet.ownerId == user.id;
-    final owner = MockData.ownerProfile(pet.ownerId);
+    final owner = ref.watch(ownerProfileProvider(pet.ownerId)).when(
+          data: (v) => v,
+          error: (err, _) => UserProfile.placeholderNeighbor(pet.ownerId),
+          loading: () => UserProfile.placeholderNeighbor(pet.ownerId),
+        );
 
     return Scaffold(
       appBar: AppBar(

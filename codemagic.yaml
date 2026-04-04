@@ -64,10 +64,15 @@ workflows:
           EXPORT_PLIST=/Users/builder/export_options.plist
           if [ ! -f "$EXPORT_PLIST" ]; then EXPORT_PLIST="$HOME/export_options.plist"; fi
           if [ ! -f "$EXPORT_PLIST" ]; then echo "export_options.plist missing; run xcode-project use-profiles first."; exit 1; fi
-          LATEST=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null) || true
-          LATEST=${LATEST:-0}
+          # CFBundleVersion must be strictly greater than the last uploaded build (TestFlight/App Store).
+          if ! LATEST=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null); then
+            LATEST=0
+            echo "WARN: get-latest-app-store-build-number failed (check APP_STORE_APPLE_ID + API key). Falling back to pubspec +N only — bump +N in pubspec.yaml if upload says duplicate."
+          fi
+          LATEST=$(echo "$LATEST" | tr -d '[:space:]')
+          case "$LATEST" in ''|*[!0-9]*) LATEST=0 ;; esac
           BUILD_NUMBER=$((LATEST + 1))
-          # If the API returns 0 (failure) or lags, LATEST+1 can still be 1 and duplicate ASC. Never go below pubspec +N.
+          # Floor: never below pubspec +N (manual bump each release when ASC API is wrong or flaky).
           if [ "$BUILD_NUMBER" -lt "$PUBSPEC_BUILD" ]; then BUILD_NUMBER=$PUBSPEC_BUILD; fi
           echo "flutter build ipa: build-name=$VERSION build-number=$BUILD_NUMBER (ASC latest=$LATEST, pubspec +$PUBSPEC_BUILD)"
           flutter build ipa --release \
