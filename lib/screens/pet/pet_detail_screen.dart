@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../config/firebase_bootstrap.dart';
 import '../../config/theme.dart';
 import '../../models/pet.dart';
 import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
+import '../../services/firestore_pet_buddy_repository.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/fullscreen_video.dart';
 import '../../widgets/paw_file_image.dart';
@@ -57,9 +59,31 @@ class PetDetailScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _OwnerCard(owner: owner, isCurrentUser: owner.id == user?.id),
-          const SizedBox(height: 20),
+          if (isMine) ...[
+            _CompactOwnerStrip(owner: owner),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.fromLTRB(0, 4, 8, 0),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () => context.push('/edit-pet/${pet.id}', extra: pet),
+                child: const Text('Edit'),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            _OwnerCard(
+              owner: owner,
+              isCurrentUser: false,
+              trailing: _BefriendPetAction(otherPet: pet),
+            ),
+            const SizedBox(height: 20),
+          ],
           _PetProfileHeader(pet: pet, isMine: isMine),
+          _PetBuddiesStrip(petId: pet.id),
           if (pet.bio != null && pet.bio!.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(pet.bio!, style: Theme.of(context).textTheme.bodyMedium),
@@ -281,11 +305,77 @@ class _PetProfileHeaderState extends ConsumerState<_PetProfileHeader> {
   }
 }
 
+/// Minimal owner row for “your pet” — keeps the screen focused on the pet.
+class _CompactOwnerStrip extends StatelessWidget {
+  const _CompactOwnerStrip({required this.owner});
+
+  final UserProfile owner;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
+          child: owner.photoUrl != null && owner.photoUrl!.isNotEmpty
+              ? ClipOval(
+                  child: PawFileOrNetworkImage(
+                    path: owner.photoUrl!,
+                    width: 40,
+                    height: 40,
+                  ),
+                )
+              : Icon(Icons.person, color: PawPartyColors.primary, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'You',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: PawPartyColors.textSecondary,
+                ),
+              ),
+              Text(
+                owner.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              if (owner.neighborhood != null && owner.neighborhood!.isNotEmpty)
+                Text(
+                  owner.neighborhood!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: PawPartyColors.textHint),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OwnerCard extends StatelessWidget {
-  const _OwnerCard({required this.owner, required this.isCurrentUser});
+  const _OwnerCard({
+    required this.owner,
+    required this.isCurrentUser,
+    this.trailing,
+  });
 
   final UserProfile owner;
   final bool isCurrentUser;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -335,17 +425,247 @@ class _OwnerCard extends StatelessWidget {
               ),
             ),
             if (!isCurrentUser)
-              FilledButton.tonal(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Messaging coming soon')),
-                  );
-                },
-                child: const Text('Message'),
-              ),
+              trailing ??
+                  FilledButton.tonal(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Messaging coming soon')),
+                      );
+                    },
+                    child: const Text('Message'),
+                  ),
           ],
         ),
       ),
+    );
+  }
+}
+
+Future<void> _onBefriendTap(
+  BuildContext context,
+  WidgetRef ref,
+  String myUid,
+  List<Pet> myPets,
+  Pet otherPet,
+) async {
+  if (!isFirebaseInitialized) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Firebase must be configured to connect pets.'),
+      ),
+    );
+    return;
+  }
+  if (myPets.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Add a pet to your profile first.')),
+    );
+    return;
+  }
+  final Pet? chosen = myPets.length == 1
+      ? myPets.first
+      : await showModalBottomSheet<Pet>(
+          context: context,
+          showDragHandle: true,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: Text(
+                    'Which pet is connecting?',
+                    style: Theme.of(ctx).textTheme.titleMedium,
+                  ),
+                ),
+                ...myPets.map(
+                  (p) => ListTile(
+                    leading: CircleAvatar(
+                      child: Text(p.name.isNotEmpty ? p.name[0].toUpperCase() : '?'),
+                    ),
+                    title: Text(p.name),
+                    onTap: () => Navigator.pop(ctx, p),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+  if (chosen == null || !context.mounted) return;
+  try {
+    await FirestorePetBuddyRepository.sendBuddyRequest(
+      fromUid: myUid,
+      fromPetId: chosen.id,
+      toPetId: otherPet.id,
+      toOwnerId: otherPet.ownerId,
+    );
+    ref.invalidate(outgoingPetBuddyRequestsProvider);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Request sent. ${otherPet.name}'s parent can accept under Friends.",
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Could not save: $e')),
+    );
+  }
+}
+
+class _BefriendPetAction extends ConsumerWidget {
+  const _BefriendPetAction({required this.otherPet});
+
+  final Pet otherPet;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authStateProvider).user;
+    if (user == null) return const SizedBox.shrink();
+
+    final myPets = ref.watch(userPetsProvider);
+    final buddiesAsync = ref.watch(buddyPetsForPetProvider(otherPet.id));
+    final outgoingAsync = ref.watch(outgoingPetBuddyRequestsProvider);
+
+    final loading = buddiesAsync.isLoading || outgoingAsync.isLoading;
+    if (loading) {
+      return const SizedBox(
+        width: 36,
+        height: 36,
+        child: Padding(
+          padding: EdgeInsets.all(6),
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final buddies = buddiesAsync.value ?? [];
+    final outgoing = outgoingAsync.value ?? [];
+    final mine = myPets.map((p) => p.id).toSet();
+    final linked = buddies.any((p) => mine.contains(p.id));
+    if (linked) {
+      return Chip(
+        avatar: Icon(Icons.pets, size: 18, color: PawPartyColors.primary),
+        label: const Text('Paw buddies'),
+        side: BorderSide(
+          color: PawPartyColors.primary.withValues(alpha: 0.35),
+        ),
+        backgroundColor: PawPartyColors.primary.withValues(alpha: 0.08),
+      );
+    }
+
+    final pendingOut = outgoing.any((r) => r.toPetId == otherPet.id);
+    if (pendingOut) {
+      return Chip(
+        avatar: Icon(Icons.schedule_send, size: 18, color: PawPartyColors.textSecondary),
+        label: const Text('Request sent'),
+        side: BorderSide(color: PawPartyColors.divider),
+      );
+    }
+
+    return FilledButton.tonal(
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      ),
+      onPressed: () => _onBefriendTap(context, ref, user.id, myPets, otherPet),
+      child: const Text('Befriend'),
+    );
+  }
+}
+
+class _PetBuddiesStrip extends ConsumerWidget {
+  const _PetBuddiesStrip({required this.petId});
+
+  final String petId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(buddyPetsForPetProvider(petId));
+    return async.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (buddies) {
+        if (buddies.isEmpty) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Paw buddies',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: buddies.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
+                itemBuilder: (context, i) {
+                  final b = buddies[i];
+                  return Material(
+                    color: PawPartyColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    child: InkWell(
+                      onTap: () => context.push('/pet/${b.id}'),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: 88,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: PawPartyColors.divider),
+                        ),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: b.photoUrl != null &&
+                                        b.photoUrl!.isNotEmpty
+                                    ? PawFileOrNetworkImage(
+                                        path: b.photoUrl!,
+                                        width: 72,
+                                        height: 72,
+                                      )
+                                    : ColoredBox(
+                                        color: PawPartyColors.surfaceVariant,
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.pets,
+                                            color: PawPartyColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              b.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        );
+      },
     );
   }
 }

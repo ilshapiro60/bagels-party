@@ -1,1 +1,27 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"pawparty-app","appId":"1:1073924094679:android:5ab2b340e05d85541ece92","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"pawparty-app","configurations":{"android":"1:1073924094679:android:5ab2b340e05d85541ece92","ios":"1:1073924094679:ios:db3f0d980c7a0e731ece92","web":"1:1073924094679:web:237516c02bf5e4da1ece92"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "pawparty-app",
+          "appId": "1:1073924094679:android:5ab2b340e05d85541ece92",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "pawparty-app",
+          "configurations": {
+            "android": "1:1073924094679:android:5ab2b340e05d85541ece92",
+            "ios": "1:1073924094679:ios:db3f0d980c7a0e731ece92",
+            "web": "1:1073924094679:web:237516c02bf5e4da1ece92"
+          }
+        }
+      }
+    }
+  }
+}

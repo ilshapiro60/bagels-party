@@ -11,12 +11,15 @@ import '../config/firebase_bootstrap.dart';
 import '../config/google_sign_in_init.dart';
 import '../firebase_options.dart';
 import '../models/meetup.dart';
+import '../models/pet_buddy_request.dart';
 import '../models/party_story.dart';
 import '../models/passport_entry.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
 import '../services/auth_persistence.dart';
 import '../services/device_location_service.dart';
+import '../services/firestore_meetup_repository.dart';
+import '../services/firestore_pet_buddy_repository.dart';
 import '../services/firestore_pet_repository.dart';
 import '../services/firestore_profile_repository.dart';
 import '../services/firestore_retry.dart';
@@ -400,6 +403,31 @@ class PetsNotifier extends Notifier<List<Pet>> {
   }
 }
 
+/// Each friend's pets with a label for the owner (for connection invites).
+/// Only users in [UserProfile.friendUids] are included.
+final friendsPetInviteOptionsProvider =
+    FutureProvider<List<(Pet pet, String ownerLabel)>>((ref) async {
+  final user = ref.watch(authStateProvider).user;
+  if (user == null || !isFirebaseInitialized) return [];
+  final friendUids = user.friendUids.toSet();
+  if (friendUids.isEmpty) return [];
+  final out = <(Pet, String)>[];
+  for (final uid in friendUids) {
+    final profile = await FirestoreProfileRepository.fetchProfile(uid);
+    final label = profile != null && profile.displayName.trim().isNotEmpty
+        ? profile.displayName
+        : 'Friend';
+    final pets = await FirestorePetRepository.loadForUser(uid);
+    for (final p in pets) {
+      out.add((p, label));
+    }
+  }
+  out.sort(
+    (a, b) => a.$1.name.toLowerCase().compareTo(b.$1.name.toLowerCase()),
+  );
+  return out;
+});
+
 final communityPetsStreamProvider = StreamProvider<List<Pet>>((ref) {
   final auth = ref.watch(authStateProvider);
   if (!isFirebaseInitialized || !auth.isAuthenticated || auth.user == null) {
@@ -416,8 +444,50 @@ final nearbyPetsProvider = Provider<List<Pet>>((ref) {
   return async.value ?? [];
 });
 
-final upcomingMeetupsProvider = Provider<List<Meetup>>((ref) {
-  return const [];
+final upcomingMeetupsProvider = StreamProvider<List<Meetup>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) {
+    return Stream.value([]);
+  }
+  return FirestoreMeetupRepository.watchHostedBy(uid);
+});
+
+/// Other pets linked to [petId] via `petBuddies` (for profile + Discover).
+final buddyPetsForPetProvider = StreamProvider.family<List<Pet>, String>((
+  ref,
+  petId,
+) {
+  return FirestorePetBuddyRepository.watchEdgesForPet(petId).asyncMap((
+    edges,
+  ) async {
+    final out = <Pet>[];
+    for (final e in edges) {
+      final p = await FirestorePetRepository.fetchPet(
+        e.otherOwnerId,
+        e.otherPetId,
+      );
+      if (p != null) out.add(p);
+    }
+    return out;
+  });
+});
+
+final incomingPetBuddyRequestsProvider =
+    StreamProvider<List<PetBuddyRequest>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) {
+    return Stream.value([]);
+  }
+  return FirestorePetBuddyRepository.watchIncomingPending(uid);
+});
+
+final outgoingPetBuddyRequestsProvider =
+    StreamProvider<List<PetBuddyRequest>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) {
+    return Stream.value([]);
+  }
+  return FirestorePetBuddyRepository.watchOutgoingPending(uid);
 });
 
 final ownerProfileProvider =

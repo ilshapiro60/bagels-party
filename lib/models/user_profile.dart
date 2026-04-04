@@ -131,6 +131,31 @@ class UserProfile {
     );
   }
 
+  UserProfile copyWithHostCount(int hostCount) {
+    return UserProfile(
+      id: id,
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      ownerGalleryImagePaths: ownerGalleryImagePaths,
+      ownerGalleryVideoPaths: ownerGalleryVideoPaths,
+      neighborhood: neighborhood,
+      latitude: latitude,
+      longitude: longitude,
+      petIds: petIds,
+      friendUids: friendUids,
+      childAges: childAges,
+      hostCount: hostCount,
+      attendCount: attendCount,
+      hostRating: hostRating,
+      guestRating: guestRating,
+      isHostPassActive: isHostPassActive,
+      hostPassExpiry: hostPassExpiry,
+      createdAt: createdAt,
+      bio: bio,
+    );
+  }
+
   UserProfile copyWithProfile({
     String? displayName,
     String? email,

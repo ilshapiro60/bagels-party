@@ -24,6 +24,22 @@
         { "fieldPath": "fromUid", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "petBuddyRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "toOwnerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "petBuddyRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromOwnerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

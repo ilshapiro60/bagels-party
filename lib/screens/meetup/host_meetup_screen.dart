@@ -3,9 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../config/theme.dart';
+import 'package:uuid/uuid.dart';
 import '../../config/constants.dart';
+import '../../config/firebase_bootstrap.dart';
+import '../../config/theme.dart';
+import '../../models/meetup.dart';
 import '../../providers/app_providers.dart';
+import '../../services/approximate_location.dart';
+import '../../services/firestore_meetup_repository.dart';
+import '../../services/firestore_profile_repository.dart';
 import '../../widgets/host_venue_map.dart';
 import '../../widgets/pizza_commitment.dart';
 
@@ -40,6 +46,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
   bool _willProvideDrinks = false;
   bool _willAccommodateAllergies = false;
   bool _acknowledgesHostDuty = false;
+  bool _creating = false;
 
   @override
   void dispose() {
@@ -50,15 +57,55 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
     super.dispose();
   }
 
-  void _nextStep() {
-    if (_currentStep < 2) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+  bool _validateStep1ForContinue() {
+    if (_titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add a party title to continue.')),
       );
-      setState(() => _currentStep++);
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateStep2ForContinue() {
+    if (_addressController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add an address for your space to continue.'),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  void _nextStep() {
+    if (_currentStep == 0) {
+      if (!_validateStep1ForContinue()) return;
+    } else if (_currentStep == 1) {
+      if (!_validateStep2ForContinue()) return;
     } else {
-      _createMeetup();
+      return;
+    }
+    _pageController.nextPage(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+    );
+    setState(() => _currentStep++);
+  }
+
+  void _onCreatePressed() {
+    if (_creating) return;
+    _createMeetup();
+  }
+
+  void _exitHostFlow() {
+    if (!context.mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      // Opened via context.go('/host') — no stack entry, so pop() is a no-op.
+      context.go('/home');
     }
   }
 
@@ -70,22 +117,115 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
       );
       setState(() => _currentStep--);
     } else {
-      context.pop();
+      _exitHostFlow();
     }
   }
 
-  void _createMeetup() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text(
-          'Preview only — parties are not saved or sent yet. Backend coming soon.',
+  Future<void> _createMeetup() async {
+    final title = _titleController.text.trim();
+    final address = _addressController.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add a party title.')),
+      );
+      return;
+    }
+    if (address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add an address for your space.')),
+      );
+      return;
+    }
+    if (!isFirebaseInitialized) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Firebase is not configured — cannot save the party yet.'),
         ),
-        backgroundColor: PawPartyColors.textSecondary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-    context.go('/home');
+      );
+      return;
+    }
+
+    final user = ref.read(authStateProvider).user;
+    if (user == null) return;
+
+    FocusScope.of(context).unfocus();
+
+    setState(() => _creating = true);
+    try {
+      final when = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        _selectedTime.hour,
+        _selectedTime.minute,
+      );
+      final lat = user.latitude ?? kFallbackMapLat;
+      final lng = user.longitude ?? kFallbackMapLng;
+      final myPetIds = ref.read(userPetsProvider).map((p) => p.id).toList();
+
+      final meetup = Meetup(
+        id: const Uuid().v4(),
+        hostId: user.id,
+        hostName: user.displayName,
+        hostPhotoUrl: user.photoUrl,
+        title: title,
+        description: _descController.text.trim().isEmpty
+            ? null
+            : _descController.text.trim(),
+        theme: _selectedTheme,
+        dateTime: when,
+        durationMinutes: _duration,
+        address: address,
+        latitude: lat,
+        longitude: lng,
+        maxGuests: _maxGuests,
+        invites: const [],
+        pizzaCommitment: PizzaCommitment(
+          willProvidePizza: _willProvidePizza,
+          willProvideDrinks: _willProvideDrinks,
+          willAccommodateAllergies: _willAccommodateAllergies,
+          acknowledgesHostDuty: _acknowledgesHostDuty,
+        ),
+        status: MeetupStatus.open,
+        hasYard: _hasYard,
+        hasPool: _hasPool,
+        kidFriendly: _kidFriendly,
+        compatiblePetIds: myPetIds,
+        createdAt: DateTime.now(),
+      );
+
+      await FirestoreMeetupRepository.createMeetup(meetup);
+      await FirestoreProfileRepository.incrementHostCount(user.id);
+      ref.read(authStateProvider.notifier).updateUser(
+            user.copyWithHostCount(user.hostCount + 1),
+          );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('“${meetup.title}” is live! Guests can discover it soon.'),
+          backgroundColor: PawPartyColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      context.go('/home');
+    } catch (e) {
+      if (!mounted) return;
+      final es = e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            es.contains('permission-denied')
+                ? 'Permission denied saving the party. Deploy latest rules: '
+                    'firebase deploy --only firestore:rules'
+                : 'Could not create party: $e',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
   }
 
   Future<void> _selectDate() async {
@@ -108,7 +248,14 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _previousStep();
+      },
+      child: Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new),
@@ -142,9 +289,15 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
               ],
             ),
           ),
-          _buildBottomButton(),
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: _buildBottomButton(),
+          ),
         ],
       ),
+    ),
     );
   }
 
@@ -476,7 +629,8 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
         _willProvideDrinks &&
         _willAccommodateAllergies &&
         _acknowledgesHostDuty;
-    final canProceed = isLastStep ? pizzaComplete : true;
+    final canProceed =
+        isLastStep ? pizzaComplete && !_creating : !_creating;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
@@ -505,11 +659,22 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
             width: double.infinity,
             height: 56,
             child: ElevatedButton(
-              onPressed: canProceed ? _nextStep : null,
+              onPressed: canProceed
+                  ? (isLastStep ? _onCreatePressed : _nextStep)
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: isLastStep ? PawPartyColors.success : PawPartyColors.primary,
               ),
-              child: Text(isLastStep ? 'Create party! 🍕' : 'Continue'),
+              child: _creating && isLastStep
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(isLastStep ? 'Create party! 🍕' : 'Continue'),
             ),
           ),
         ],

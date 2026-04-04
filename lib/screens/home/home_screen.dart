@@ -17,7 +17,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
     final pets = ref.watch(userPetsProvider);
-    final meetups = ref.watch(upcomingMeetupsProvider);
+    final meetups = ref.watch(upcomingMeetupsProvider).value ?? [];
     final userName = authState.user?.displayName ?? 'Friend';
     final areaLabel = authState.user?.neighborhood ?? 'Nearby';
     final photoUrl = authState.user?.photoUrl;
@@ -48,7 +48,10 @@ class HomeScreen extends ConsumerWidget {
                     itemCount: meetups.length,
                     itemBuilder: (context, index) => Padding(
                       padding: const EdgeInsets.only(right: 12),
-                      child: MeetupCard(meetup: meetups[index]),
+                      child: MeetupCard(
+                        meetup: meetups[index],
+                        currentUserId: authState.user?.id,
+                      ),
                     ),
                   ),
                 ),
@@ -59,7 +62,7 @@ class HomeScreen extends ConsumerWidget {
             ),
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 180,
+                height: 200,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -317,8 +320,9 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           Text(
             pet.name,
-            style: Theme.of(context).textTheme.titleMedium,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 4),
           Text(

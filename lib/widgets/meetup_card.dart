@@ -5,12 +5,18 @@ import '../models/meetup.dart';
 
 class MeetupCard extends StatelessWidget {
   final Meetup meetup;
+  final String? currentUserId;
 
-  const MeetupCard({super.key, required this.meetup});
+  const MeetupCard({
+    super.key,
+    required this.meetup,
+    this.currentUserId,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isHosting = meetup.hostId == 'user_1';
+    final isHosting =
+        currentUserId != null && meetup.hostId == currentUserId;
     final dateStr = DateFormat('EEE, MMM d').format(meetup.dateTime);
     final timeStr = DateFormat('h:mm a').format(meetup.dateTime);
 

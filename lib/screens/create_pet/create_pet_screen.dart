@@ -16,7 +16,11 @@ import '../../widgets/personality_slider.dart';
 import '../../services/firebase_storage_service.dart';
 
 class CreatePetScreen extends ConsumerStatefulWidget {
-  const CreatePetScreen({super.key});
+  const CreatePetScreen({super.key, this.editPetId, this.initialPet});
+
+  /// When set, screen loads that pet and saves with [updatePet] instead of create.
+  final String? editPetId;
+  final Pet? initialPet;
 
   @override
   ConsumerState<CreatePetScreen> createState() => _CreatePetScreenState();
@@ -26,6 +30,11 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
   final _pageController = PageController();
   int _currentStep = 0;
   final _totalSteps = 4;
+
+  /// Baseline doc when editing (preserves id, createdAt, ratings, map anchors).
+  Pet? _baselinePet;
+  bool _hydratedEdit = false;
+  bool _editPetMissing = false;
 
   // Step 1: Basics
   final _nameController = TextEditingController();
@@ -54,6 +63,86 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
   bool _isSpayedNeutered = false;
   bool _isVaccinated = false;
   bool _saving = false;
+
+  static bool _isRemoteMedia(String path) {
+    final p = path.toLowerCase();
+    return p.startsWith('http://') || p.startsWith('https://');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryHydrateEdit());
+  }
+
+  void _tryHydrateEdit() {
+    final editId = widget.editPetId;
+    if (editId == null || _hydratedEdit || _editPetMissing) return;
+
+    Pet? pet = widget.initialPet;
+    if (pet == null || pet.id != editId) {
+      pet = null;
+      for (final p in ref.read(userPetsProvider)) {
+        if (p.id == editId) {
+          pet = p;
+          break;
+        }
+      }
+    }
+
+    if (pet == null) {
+      if (ref.read(userPetsProvider).isNotEmpty) {
+        setState(() => _editPetMissing = true);
+      }
+      return;
+    }
+
+    final user = ref.read(authStateProvider).user;
+    if (user == null || pet.ownerId != user.id) {
+      setState(() => _editPetMissing = true);
+      return;
+    }
+
+    _applyPetToForm(pet);
+    setState(() => _hydratedEdit = true);
+  }
+
+  void _applyPetToForm(Pet p) {
+    _baselinePet = p;
+    _nameController.text = p.name;
+    _selectedType = AppConstants.petTypes.contains(p.type)
+        ? p.type
+        : AppConstants.petTypes.last;
+    _selectedGender = AppConstants.petGenders.contains(p.gender)
+        ? p.gender
+        : AppConstants.petGenders[0];
+    _breedController.text = p.breed ?? '';
+    _selectedSize = AppConstants.sizeCategories.contains(p.size)
+        ? p.size
+        : AppConstants.sizeCategories[2];
+    _ageYears = p.ageYears ?? 1;
+    _ageMonths = p.ageMonths ?? 0;
+    _profilePhotoPath = p.photoUrl;
+    _galleryPhotos
+      ..clear()
+      ..addAll(p.photoGallery);
+    _galleryVideos
+      ..clear()
+      ..addAll(p.videoPaths);
+    _energyLevel = p.energyLevel;
+    _socialComfort = p.socialComfort;
+    _kidTolerance = p.kidTolerance;
+    _sizeTolerance = p.sizeTolerance;
+    _selectedPlayStyles
+      ..clear()
+      ..addAll(p.playStyles);
+    _selectedTriggers
+      ..clear()
+      ..addAll(p.triggers);
+    _bioController.text = p.bio ?? '';
+    _isSpayedNeutered = p.isSpayedNeutered;
+    _isVaccinated = p.isVaccinated;
+  }
 
   @override
   void dispose() {
@@ -84,7 +173,19 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
       );
       setState(() => _currentStep--);
     } else {
+      _exitWizard();
+    }
+  }
+
+  void _exitWizard() {
+    if (!context.mounted) return;
+    final editId = widget.editPetId;
+    if (editId != null) {
       context.pop();
+    } else if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/home');
     }
   }
 
@@ -96,30 +197,48 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
       );
       return;
     }
+    final isEdit = _baselinePet != null;
+    if (isEdit && _baselinePet!.ownerId != user.id) return;
+
     setState(() => _saving = true);
     try {
-      final petId = const Uuid().v4();
       final storage = FirebaseStorageService.instance;
+      final petId = isEdit ? _baselinePet!.id : const Uuid().v4();
 
-      String? photoUrl = _profilePhotoPath;
-      if (photoUrl != null) {
-        photoUrl = await storage.uploadPetAvatar(
-          localPath: photoUrl,
-          petId: petId,
-        );
+      String? photoUrl;
+      final prof = _profilePhotoPath;
+      if (prof != null && prof.isNotEmpty) {
+        if (_isRemoteMedia(prof)) {
+          photoUrl = prof;
+        } else {
+          photoUrl = await storage.uploadPetAvatar(
+            localPath: prof,
+            petId: petId,
+          );
+        }
+      } else if (isEdit) {
+        photoUrl = _baselinePet!.photoUrl;
       }
 
       final photoGallery = <String>[];
       for (final path in _galleryPhotos) {
-        photoGallery.add(
-          await storage.uploadPetGalleryPhoto(localPath: path, petId: petId),
-        );
+        if (_isRemoteMedia(path)) {
+          photoGallery.add(path);
+        } else {
+          photoGallery.add(
+            await storage.uploadPetGalleryPhoto(localPath: path, petId: petId),
+          );
+        }
       }
       final videoPaths = <String>[];
       for (final path in _galleryVideos) {
-        videoPaths.add(
-          await storage.uploadPetVideo(localPath: path, petId: petId),
-        );
+        if (_isRemoteMedia(path)) {
+          videoPaths.add(path);
+        } else {
+          videoPaths.add(
+            await storage.uploadPetVideo(localPath: path, petId: petId),
+          );
+        }
       }
 
       final pet = Pet(
@@ -144,21 +263,37 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
         bio: _bioController.text.trim().isEmpty ? null : _bioController.text.trim(),
         isSpayedNeutered: _isSpayedNeutered,
         isVaccinated: _isVaccinated,
-        createdAt: DateTime.now(),
+        createdAt: isEdit ? _baselinePet!.createdAt : DateTime.now(),
+        meetupCount: isEdit ? _baselinePet!.meetupCount : 0,
+        averageRating: isEdit ? _baselinePet!.averageRating : 0.0,
+        ownerApproxLat: isEdit ? _baselinePet!.ownerApproxLat : null,
+        ownerApproxLng: isEdit ? _baselinePet!.ownerApproxLng : null,
       );
 
-      await ref.read(userPetsProvider.notifier).addPet(pet);
+      if (isEdit) {
+        await ref.read(userPetsProvider.notifier).updatePet(pet);
+      } else {
+        await ref.read(userPetsProvider.notifier).addPet(pet);
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${pet.name} has joined ${AppConstants.appName}! 🎉'),
+          content: Text(
+            isEdit
+                ? "${pet.name}'s profile was updated"
+                : '${pet.name} has joined ${AppConstants.appName}! 🎉',
+          ),
           backgroundColor: PawPartyColors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      context.go('/home');
+      if (isEdit) {
+        context.pop();
+      } else {
+        context.go('/home');
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -259,13 +394,66 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<List<Pet>>(userPetsProvider, (prev, next) {
+      if (widget.editPetId != null && !_hydratedEdit && !_editPetMissing) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _tryHydrateEdit());
+      }
+    });
+
+    if (widget.editPetId != null && _editPetMissing) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new),
+            onPressed: () => context.go('/home'),
+          ),
+          title: const Text('Edit pet'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'This pet isn\'t in your account or you don\'t have access.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: () => context.go('/home'),
+                  child: const Text('Back to home'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (widget.editPetId != null && !_hydratedEdit) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new),
+            onPressed: _exitWizard,
+          ),
+          title: const Text('Edit pet'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final isEdit = widget.editPetId != null;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new),
           onPressed: _previousStep,
         ),
-        title: const Text('Add Your Pet'),
+        title: Text(isEdit ? 'Edit pet' : 'Add Your Pet'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -871,7 +1059,13 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
                   height: 24,
                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
-              : Text(isLastStep ? 'Add to ${AppConstants.appName}!' : 'Continue'),
+              : Text(
+                  isLastStep
+                      ? (widget.editPetId != null
+                          ? 'Save changes'
+                          : 'Add to ${AppConstants.appName}!')
+                      : 'Continue',
+                ),
         ),
       ),
     );

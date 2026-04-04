@@ -60,6 +60,13 @@ class FirestoreProfileRepository {
     await _profiles.doc(u.id).set(profileToFirestore(u), SetOptions(merge: true));
   }
 
+  static Future<void> incrementHostCount(String uid) async {
+    await _profiles.doc(uid).set(
+      {'hostCount': FieldValue.increment(1)},
+      SetOptions(merge: true),
+    );
+  }
+
   static Future<void> updateLocation({
     required String uid,
     required double latitude,

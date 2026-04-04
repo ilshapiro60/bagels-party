@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/pet.dart';
 import '../providers/app_providers.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
@@ -96,6 +97,15 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/create-pet',
       builder: (context, state) => const CreatePetScreen(),
+    ),
+    GoRoute(
+      path: '/edit-pet/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        final extra = state.extra;
+        final initial = extra is Pet ? extra : null;
+        return CreatePetScreen(editPetId: id, initialPet: initial);
+      },
     ),
     GoRoute(
       path: '/host',

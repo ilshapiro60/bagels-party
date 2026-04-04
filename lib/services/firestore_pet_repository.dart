@@ -44,6 +44,12 @@ class FirestorePetRepository {
     await _petsCol(uid).doc(petId).delete();
   }
 
+  static Future<Pet?> fetchPet(String ownerId, String petId) async {
+    final snap = await _petsCol(ownerId).doc(petId).get();
+    if (!snap.exists || snap.data() == null) return null;
+    return petFromSnapshot(snap);
+  }
+
   /// Denormalize owner location onto the pet doc for Discover map pins.
   static Pet withOwnerAnchor(Pet pet, UserProfile? owner) {
     final lat = owner?.latitude;

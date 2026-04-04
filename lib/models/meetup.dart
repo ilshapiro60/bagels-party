@@ -1,5 +1,21 @@
 enum MeetupStatus { draft, open, full, inProgress, completed, cancelled }
 
+MeetupStatus _parseMeetupStatus(Object? raw) {
+  if (raw is! String) return MeetupStatus.open;
+  for (final v in MeetupStatus.values) {
+    if (v.name == raw) return v;
+  }
+  return MeetupStatus.open;
+}
+
+InviteStatus _parseInviteStatus(Object? raw) {
+  if (raw is! String) return InviteStatus.pending;
+  for (final v in InviteStatus.values) {
+    if (v.name == raw) return v;
+  }
+  return InviteStatus.pending;
+}
+
 enum InviteStatus { pending, accepted, declined }
 
 class Meetup {
@@ -99,7 +115,7 @@ class Meetup {
           [],
       pizzaCommitment: PizzaCommitment.fromMap(
           map['pizzaCommitment'] as Map<String, dynamic>),
-      status: MeetupStatus.values.byName(map['status'] as String),
+      status: _parseMeetupStatus(map['status']),
       hasYard: map['hasYard'] as bool? ?? false,
       hasPool: map['hasPool'] as bool? ?? false,
       kidFriendly: map['kidFriendly'] as bool? ?? true,
@@ -139,7 +155,7 @@ class MeetupInvite {
       guestId: map['guestId'] as String,
       guestName: map['guestName'] as String,
       petIds: List<String>.from(map['petIds'] ?? []),
-      status: InviteStatus.values.byName(map['status'] as String),
+      status: _parseInviteStatus(map['status']),
       sentAt: DateTime.parse(map['sentAt'] as String),
     );
   }
