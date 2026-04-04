@@ -24,6 +24,9 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- Required by Google Sign-In iOS SDK (GIDSignIn); must match CLIENT_ID in GoogleService-Info.plist -->
+	<key>GIDClientID</key>
+	<string>1073924094679-otc4k6jhnoj13a5eqra5t8b6so9uhd1f.apps.googleusercontent.com</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
