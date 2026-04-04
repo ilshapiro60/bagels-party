@@ -58,12 +58,18 @@ workflows:
         script: |
           set -e
           VERSION=$(grep '^version:' pubspec.yaml | head -1 | sed 's/version: //;s/ *#.*//' | cut -d'+' -f1 | tr -d ' ')
+          PUBSPEC_LINE=$(grep '^version:' pubspec.yaml | head -1 | sed 's/version: //;s/ *#.*//' | tr -d ' ')
+          PUBSPEC_BUILD=$(echo "$PUBSPEC_LINE" | cut -d'+' -f2)
+          PUBSPEC_BUILD=${PUBSPEC_BUILD:-1}
           EXPORT_PLIST=/Users/builder/export_options.plist
           if [ ! -f "$EXPORT_PLIST" ]; then EXPORT_PLIST="$HOME/export_options.plist"; fi
           if [ ! -f "$EXPORT_PLIST" ]; then echo "export_options.plist missing; run xcode-project use-profiles first."; exit 1; fi
           LATEST=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null) || true
           LATEST=${LATEST:-0}
           BUILD_NUMBER=$((LATEST + 1))
+          # If the API returns 0 (failure) or lags, LATEST+1 can still be 1 and duplicate ASC. Never go below pubspec +N.
+          if [ "$BUILD_NUMBER" -lt "$PUBSPEC_BUILD" ]; then BUILD_NUMBER=$PUBSPEC_BUILD; fi
+          echo "flutter build ipa: build-name=$VERSION build-number=$BUILD_NUMBER (ASC latest=$LATEST, pubspec +$PUBSPEC_BUILD)"
           flutter build ipa --release \
             --build-name="$VERSION" \
             --build-number="$BUILD_NUMBER" \
