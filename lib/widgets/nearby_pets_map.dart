@@ -116,6 +116,7 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
     final target = safeMapLatLngFromGeo(widget.viewerPoint);
     final fullscreen = maxHeight == null;
     final map = GoogleMap(
+      mapType: MapType.normal,
       initialCameraPosition: CameraPosition(
         target: target,
         zoom: safeMapZoom(_zoomForRadius(widget.radiusMiles)),

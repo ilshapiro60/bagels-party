@@ -44,6 +44,7 @@ class HostVenueMap extends StatelessWidget {
     Widget mapFor(double? maxHeight) {
       final fullscreen = maxHeight == null;
       final map = GoogleMap(
+        mapType: MapType.normal,
         initialCameraPosition:
             CameraPosition(target: target, zoom: safeMapZoom(14.5)),
         markers: {
