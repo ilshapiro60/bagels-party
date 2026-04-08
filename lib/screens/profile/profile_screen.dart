@@ -698,7 +698,7 @@ Future<void> _showBusinessEditor(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Enable business profile'),
                   value: enabled,
-                  activeColor: PawPartyColors.primary,
+                  activeTrackColor: PawPartyColors.primary,
                   onChanged: (v) => setDialogState(() => enabled = v),
                 ),
                 if (enabled) ...[
@@ -715,7 +715,7 @@ Future<void> _showBusinessEditor(
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _businessCategories.contains(selectedCategory)
+                    initialValue: _businessCategories.contains(selectedCategory)
                         ? selectedCategory
                         : _businessCategories.first,
                     decoration: const InputDecoration(
