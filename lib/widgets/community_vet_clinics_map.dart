@@ -5,6 +5,7 @@ import '../config/map_platform.dart';
 import '../config/theme.dart';
 import '../models/community_vet_clinic.dart';
 import '../services/approximate_location.dart';
+import 'expandable_map_frame.dart';
 import 'map_unavailable_placeholder.dart';
 
 /// Map of community vet clinics (geocoded positions) plus optional viewer circle.
@@ -17,6 +18,8 @@ class CommunityVetClinicsMap extends StatefulWidget {
     this.height = 220,
     this.showViewerLocation = true,
     this.onClinicMarkerTapped,
+    this.expandable = true,
+    this.fullscreenTitle = 'Vet clinics',
   });
 
   final List<CommunityVetClinic> clinics;
@@ -25,6 +28,8 @@ class CommunityVetClinicsMap extends StatefulWidget {
   final bool showViewerLocation;
   final double height;
   final ValueChanged<CommunityVetClinic>? onClinicMarkerTapped;
+  final bool expandable;
+  final String fullscreenTitle;
 
   @override
   State<CommunityVetClinicsMap> createState() => _CommunityVetClinicsMapState();
@@ -111,36 +116,43 @@ class _CommunityVetClinicsMapState extends State<CommunityVetClinicsMap> {
     };
   }
 
+  Widget _googleMap(double? maxHeight) {
+    final target = LatLng(
+      widget.viewerPoint.latitude,
+      widget.viewerPoint.longitude,
+    );
+    final fullscreen = maxHeight == null;
+    final map = GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: target,
+        zoom: _zoomForRadius(widget.radiusMiles),
+      ),
+      markers: _buildMarkers(),
+      circles: _buildCircles(),
+      zoomControlsEnabled: fullscreen,
+      mapToolbarEnabled: false,
+      myLocationButtonEnabled: false,
+      compassEnabled: fullscreen,
+      liteModeEnabled: false,
+      onMapCreated: fullscreen ? null : (c) => _controller = c,
+    );
+    if (maxHeight != null) {
+      return SizedBox(height: maxHeight, width: double.infinity, child: map);
+    }
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!mapsPlatformSupported) {
       return MapUnavailablePlaceholder(height: widget.height);
     }
 
-    final target = LatLng(
-      widget.viewerPoint.latitude,
-      widget.viewerPoint.longitude,
-    );
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: SizedBox(
-        height: widget.height,
-        child: GoogleMap(
-          initialCameraPosition: CameraPosition(
-            target: target,
-            zoom: _zoomForRadius(widget.radiusMiles),
-          ),
-          markers: _buildMarkers(),
-          circles: _buildCircles(),
-          zoomControlsEnabled: false,
-          mapToolbarEnabled: false,
-          myLocationButtonEnabled: false,
-          compassEnabled: false,
-          liteModeEnabled: false,
-          onMapCreated: (c) => _controller = c,
-        ),
-      ),
+    return ExpandableMapFrame(
+      collapsedHeight: widget.height,
+      fullscreenTitle: widget.fullscreenTitle,
+      expandable: widget.expandable,
+      mapBuilder: (context, maxHeight) => _googleMap(maxHeight),
     );
   }
 }

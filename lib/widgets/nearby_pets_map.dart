@@ -6,6 +6,7 @@ import '../config/theme.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
 import '../services/approximate_location.dart';
+import 'expandable_map_frame.dart';
 import 'map_unavailable_placeholder.dart';
 
 class NearbyPetsMap extends StatefulWidget {
@@ -19,6 +20,8 @@ class NearbyPetsMap extends StatefulWidget {
     this.onPetMarkerTapped,
     /// When false, no "You" marker or radius circle (user location unknown).
     this.showViewerLocation = true,
+    this.expandable = true,
+    this.fullscreenTitle = 'Nearby pets',
   });
 
   final List<Pet> pets;
@@ -28,6 +31,8 @@ class NearbyPetsMap extends StatefulWidget {
   final bool showViewerLocation;
   final double height;
   final ValueChanged<Pet>? onPetMarkerTapped;
+  final bool expandable;
+  final String fullscreenTitle;
 
   @override
   State<NearbyPetsMap> createState() => _NearbyPetsMapState();
@@ -109,36 +114,43 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
     };
   }
 
+  Widget _googleMap(double? maxHeight) {
+    final target = LatLng(
+      widget.viewerPoint.latitude,
+      widget.viewerPoint.longitude,
+    );
+    final fullscreen = maxHeight == null;
+    final map = GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: target,
+        zoom: _zoomForRadius(widget.radiusMiles),
+      ),
+      markers: _buildMarkers(),
+      circles: _buildCircles(),
+      zoomControlsEnabled: fullscreen,
+      mapToolbarEnabled: false,
+      myLocationButtonEnabled: false,
+      compassEnabled: fullscreen,
+      liteModeEnabled: false,
+      onMapCreated: fullscreen ? null : (c) => _controller = c,
+    );
+    if (maxHeight != null) {
+      return SizedBox(height: maxHeight, width: double.infinity, child: map);
+    }
+    return map;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!mapsPlatformSupported) {
       return MapUnavailablePlaceholder(height: widget.height);
     }
 
-    final target = LatLng(
-      widget.viewerPoint.latitude,
-      widget.viewerPoint.longitude,
-    );
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: SizedBox(
-        height: widget.height,
-        child: GoogleMap(
-          initialCameraPosition: CameraPosition(
-            target: target,
-            zoom: _zoomForRadius(widget.radiusMiles),
-          ),
-          markers: _buildMarkers(),
-          circles: _buildCircles(),
-          zoomControlsEnabled: false,
-          mapToolbarEnabled: false,
-          myLocationButtonEnabled: false,
-          compassEnabled: false,
-          liteModeEnabled: false,
-          onMapCreated: (c) => _controller = c,
-        ),
-      ),
+    return ExpandableMapFrame(
+      collapsedHeight: widget.height,
+      fullscreenTitle: widget.fullscreenTitle,
+      expandable: widget.expandable,
+      mapBuilder: (context, maxHeight) => _googleMap(maxHeight),
     );
   }
 }
