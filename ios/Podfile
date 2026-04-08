@@ -31,6 +31,9 @@ target 'Runner' do
   use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  # Native Places SDK (New) — Nearby Search for vet clinic picker.
+  pod 'GooglePlaces', '~> 10.10'
 end
 
 post_install do |installer|

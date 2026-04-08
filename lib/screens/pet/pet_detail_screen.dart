@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../config/firebase_bootstrap.dart';
+import '../../config/map_platform.dart';
 import '../../config/theme.dart';
 import '../../models/pet.dart';
 import '../../models/user_profile.dart';
@@ -13,6 +14,7 @@ import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_pet_buddy_repository.dart';
 import '../../services/firestore_pet_repository.dart';
 import '../../services/vet_clinic_geocode.dart';
+import '../vet_clinic_map_picker_screen.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/fullscreen_video.dart';
 import '../../widgets/paw_file_image.dart';
@@ -1258,6 +1260,7 @@ class _VetClinicEditorSheetState extends ConsumerState<_VetClinicEditorSheet> {
   bool _saving = false;
   double? _lat;
   double? _lng;
+  String? _vetGooglePlaceId;
 
   @override
   void initState() {
@@ -1266,6 +1269,7 @@ class _VetClinicEditorSheetState extends ConsumerState<_VetClinicEditorSheet> {
     _address = TextEditingController(text: widget.pet.vetClinicAddress ?? '');
     _lat = widget.pet.vetClinicLatitude;
     _lng = widget.pet.vetClinicLongitude;
+    _vetGooglePlaceId = widget.pet.vetGooglePlaceId;
   }
 
   @override
@@ -1316,6 +1320,44 @@ class _VetClinicEditorSheetState extends ConsumerState<_VetClinicEditorSheet> {
     }
   }
 
+  void _onVetFieldsEdited() {
+    setState(() {
+      _vetGooglePlaceId = null;
+      if (_name.text.trim().isEmpty) {
+        _lat = null;
+        _lng = null;
+      }
+    });
+  }
+
+  Future<void> _openVetMapPicker() async {
+    if (!vetClinicMapPickerSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Maps clinic picker is available on the iOS and Android apps.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final user = ref.read(authStateProvider).user;
+    final picked = await openVetClinicMapPicker(
+      context,
+      fallbackLatitude: user?.latitude,
+      fallbackLongitude: user?.longitude,
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      _name.text = picked.name;
+      _address.text = picked.address;
+      _lat = picked.latitude;
+      _lng = picked.longitude;
+      _vetGooglePlaceId = picked.placeId;
+    });
+  }
+
   Future<void> _save() async {
     final name = _name.text.trim();
     if (name.isEmpty) {
@@ -1360,6 +1402,8 @@ class _VetClinicEditorSheetState extends ConsumerState<_VetClinicEditorSheet> {
         vetClinicAddress: addr.isEmpty ? null : addr,
         vetClinicLatitude: lat,
         vetClinicLongitude: lng,
+        vetGooglePlaceId: _vetGooglePlaceId,
+        applyVetGooglePlaceId: true,
       );
       await ref.read(userPetsProvider.notifier).updatePet(updated);
       if (mounted) Navigator.pop(context);
@@ -1414,6 +1458,7 @@ class _VetClinicEditorSheetState extends ConsumerState<_VetClinicEditorSheet> {
             TextField(
               controller: _name,
               textCapitalization: TextCapitalization.words,
+              onChanged: (_) => _onVetFieldsEdited(),
               decoration: const InputDecoration(
                 labelText: 'Clinic name',
                 hintText: 'Required',
@@ -1424,11 +1469,54 @@ class _VetClinicEditorSheetState extends ConsumerState<_VetClinicEditorSheet> {
               controller: _address,
               textCapitalization: TextCapitalization.sentences,
               maxLines: 2,
+              onChanged: (_) => _onVetFieldsEdited(),
               decoration: const InputDecoration(
                 labelText: 'Address',
                 hintText: 'Recommended for others to find the clinic',
               ),
             ),
+            const SizedBox(height: 12),
+            if (vetClinicMapPickerSupported)
+              FilledButton.tonalIcon(
+                onPressed: _openVetMapPicker,
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Find clinic on map'),
+              ),
+            if (vetClinicMapPickerSupported) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Browse nearby vets on the map, or type the clinic below.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: PawPartyColors.textSecondary,
+                  height: 1.35,
+                ),
+              ),
+            ],
+            if (_vetGooglePlaceId != null && _name.text.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 18,
+                      color: PawPartyColors.success,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Clinic linked for rich Google Maps (reviews & hours).',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: PawPartyColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _geocoding || _saving ? null : _lookUpCoordinates,

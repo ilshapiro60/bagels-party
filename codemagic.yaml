@@ -17,6 +17,8 @@
 #      -----BEGIN PRIVATE KEY----- / END lines. Fixes 401 publishing if UI “integration” auth fails.
 # 6. Signing: Codemagic → Teams → Code signing identities → iOS, or let the workflow fetch profiles via the same API key
 #    (see https://docs.codemagic.io/yaml-code-signing/signing-ios/ ).
+# 7. Places (vet map picker): uses the native Places SDK — same API key as Maps (GMSApiKey in Info.plist).
+#    No extra env var needed; just ensure Places API (New) is enabled on that key in Google Cloud.
 #
 # Versioning: `flutter build ipa` uses `version:` from pubspec.yaml (part before +) as CFBundleShortVersionString;
 # iOS build number (CFBundleVersion) = latest App Store Connect build + 1 (or 1 if none yet).

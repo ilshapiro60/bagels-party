@@ -25,6 +25,12 @@ class UserProfile {
   final DateTime createdAt;
   final String? bio;
 
+  /// Business account fields (all optional, default false/null for regular users).
+  final bool isBusinessAccount;
+  final String? businessName;
+  final String? businessCategory;
+  final String? businessPlaceId;
+
   UserProfile({
     required this.id,
     required this.email,
@@ -48,6 +54,10 @@ class UserProfile {
     this.hostPassExpiry,
     required this.createdAt,
     this.bio,
+    this.isBusinessAccount = false,
+    this.businessName,
+    this.businessCategory,
+    this.businessPlaceId,
   }) : neighborhoodKey = _effectiveNeighborhoodKey(neighborhoodKey, neighborhood);
 
   static String normalizeAreaKey(String? neighborhood) =>
@@ -60,7 +70,13 @@ class UserProfile {
   }
 
   bool get canHostFree => hostCount < 3;
-  bool get canHost => canHostFree || isHostPassActive;
+  bool get canHost => canHostFree || isHostPassActive || isBusinessAccount;
+
+  /// Display name for event cards -- prefers businessName for business accounts.
+  String get eventHostDisplayName =>
+      isBusinessAccount && businessName != null && businessName!.trim().isNotEmpty
+          ? businessName!
+          : displayName;
 
   Map<String, dynamic> toMap() {
     return {
@@ -86,6 +102,10 @@ class UserProfile {
       'hostPassExpiry': hostPassExpiry?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'bio': bio,
+      'isBusinessAccount': isBusinessAccount,
+      'businessName': businessName,
+      'businessCategory': businessCategory,
+      'businessPlaceId': businessPlaceId,
     };
   }
 
@@ -120,6 +140,10 @@ class UserProfile {
           : null,
       createdAt: DateTime.parse(map['createdAt'] as String),
       bio: map['bio'] as String?,
+      isBusinessAccount: map['isBusinessAccount'] as bool? ?? false,
+      businessName: map['businessName'] as String?,
+      businessCategory: map['businessCategory'] as String?,
+      businessPlaceId: map['businessPlaceId'] as String?,
     );
   }
 
@@ -152,6 +176,10 @@ class UserProfile {
       hostPassExpiry: hostPassExpiry,
       createdAt: createdAt,
       bio: bio,
+      isBusinessAccount: isBusinessAccount,
+      businessName: businessName,
+      businessCategory: businessCategory,
+      businessPlaceId: businessPlaceId,
     );
   }
 
@@ -179,6 +207,10 @@ class UserProfile {
       hostPassExpiry: hostPassExpiry,
       createdAt: createdAt,
       bio: bio,
+      isBusinessAccount: isBusinessAccount,
+      businessName: businessName,
+      businessCategory: businessCategory,
+      businessPlaceId: businessPlaceId,
     );
   }
 
@@ -221,6 +253,47 @@ class UserProfile {
       bio: updateBio
           ? (bio == null || bio.isEmpty ? null : bio)
           : this.bio,
+      isBusinessAccount: isBusinessAccount,
+      businessName: businessName,
+      businessCategory: businessCategory,
+      businessPlaceId: businessPlaceId,
+    );
+  }
+
+  UserProfile copyWithBusiness({
+    required bool isBusinessAccount,
+    String? businessName,
+    String? businessCategory,
+    String? businessPlaceId,
+    bool clearBusinessFields = false,
+  }) {
+    return UserProfile(
+      id: id,
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      ownerGalleryImagePaths: ownerGalleryImagePaths,
+      ownerGalleryVideoPaths: ownerGalleryVideoPaths,
+      neighborhood: neighborhood,
+      neighborhoodKey: neighborhoodKey,
+      isModerator: isModerator,
+      latitude: latitude,
+      longitude: longitude,
+      petIds: petIds,
+      friendUids: friendUids,
+      childAges: childAges,
+      hostCount: hostCount,
+      attendCount: attendCount,
+      hostRating: hostRating,
+      guestRating: guestRating,
+      isHostPassActive: isHostPassActive,
+      hostPassExpiry: hostPassExpiry,
+      createdAt: createdAt,
+      bio: bio,
+      isBusinessAccount: isBusinessAccount,
+      businessName: clearBusinessFields ? null : (businessName ?? this.businessName),
+      businessCategory: clearBusinessFields ? null : (businessCategory ?? this.businessCategory),
+      businessPlaceId: clearBusinessFields ? null : (businessPlaceId ?? this.businessPlaceId),
     );
   }
 

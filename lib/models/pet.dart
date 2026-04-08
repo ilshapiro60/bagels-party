@@ -33,7 +33,7 @@ class Pet {
   final String? vetClinicAddress;
   final double? vetClinicLatitude;
   final double? vetClinicLongitude;
-  /// Reserved for future Google Places deduplication; optional.
+  /// Google Place ID when the clinic was chosen via Places (map picker); optional.
   final String? vetGooglePlaceId;
 
   const Pet({
@@ -198,6 +198,9 @@ class Pet {
     double? vetClinicLatitude,
     double? vetClinicLongitude,
     String? vetGooglePlaceId,
+    /// When true, [vetGooglePlaceId] replaces the stored value (use `null` to clear).
+    /// When false, omitted [vetGooglePlaceId] keeps the previous value (legacy behavior).
+    bool applyVetGooglePlaceId = false,
     bool clearVetClinicLink = false,
   }) {
     if (clearVetClinicLink) {
@@ -266,7 +269,9 @@ class Pet {
       vetClinicAddress: vetClinicAddress ?? this.vetClinicAddress,
       vetClinicLatitude: vetClinicLatitude ?? this.vetClinicLatitude,
       vetClinicLongitude: vetClinicLongitude ?? this.vetClinicLongitude,
-      vetGooglePlaceId: vetGooglePlaceId ?? this.vetGooglePlaceId,
+      vetGooglePlaceId: applyVetGooglePlaceId
+          ? vetGooglePlaceId
+          : (vetGooglePlaceId ?? this.vetGooglePlaceId),
     );
   }
 }

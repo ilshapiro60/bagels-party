@@ -725,12 +725,7 @@ class _PartyInviteCardState extends ConsumerState<_PartyInviteCard> {
 
 Future<void> _deletePartyLinkedMedia(WidgetRef ref, String meetupId) async {
   final storage = FirebaseStorageService.instance;
-  final stories = ref.read(partyStoriesProvider);
   final urls = <String>{};
-  for (final s in stories.where((s) => s.meetupId == meetupId)) {
-    urls.addAll(s.imagePaths);
-    urls.addAll(s.videoPaths);
-  }
   if (isFirebaseInitialized) {
     final user = ref.read(authStateProvider).user;
     if (user != null) {
@@ -802,7 +797,6 @@ Future<void> _confirmDeleteHostedParty(
         );
 
     await _deletePartyLinkedMedia(ref, meetup.id);
-    ref.read(partyStoriesProvider.notifier).removeStoriesForMeetup(meetup.id);
     await FirestorePassportRepository.deleteEntriesForMeetup(
       ownerId: user.id,
       meetupId: meetup.id,

@@ -41,6 +41,11 @@ class Meetup {
   final List<String> compatiblePetIds;
   final DateTime createdAt;
 
+  /// When true the event is discoverable by all nearby users (not invite-only).
+  final bool isPublic;
+  final String? venueName;
+  final String? venuePlaceId;
+
   const Meetup({
     required this.id,
     required this.hostId,
@@ -63,6 +68,9 @@ class Meetup {
     this.kidFriendly = true,
     this.compatiblePetIds = const [],
     required this.createdAt,
+    this.isPublic = false,
+    this.venueName,
+    this.venuePlaceId,
   });
 
   int get acceptedCount => invites.where((i) => i.status == InviteStatus.accepted).length;
@@ -91,6 +99,9 @@ class Meetup {
       'kidFriendly': kidFriendly,
       'compatiblePetIds': compatiblePetIds,
       'createdAt': createdAt.toIso8601String(),
+      'isPublic': isPublic,
+      'venueName': venueName,
+      'venuePlaceId': venuePlaceId,
     };
   }
 
@@ -121,8 +132,15 @@ class Meetup {
       kidFriendly: map['kidFriendly'] as bool? ?? true,
       compatiblePetIds: List<String>.from(map['compatiblePetIds'] ?? []),
       createdAt: DateTime.parse(map['createdAt'] as String),
+      isPublic: map['isPublic'] as bool? ?? false,
+      venueName: map['venueName'] as String?,
+      venuePlaceId: map['venuePlaceId'] as String?,
     );
   }
+
+  /// Displayable location label: venue name if set, otherwise raw address.
+  String get venueDisplayName =>
+      venueName != null && venueName!.trim().isNotEmpty ? venueName! : address;
 }
 
 class MeetupInvite {

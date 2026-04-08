@@ -26,11 +26,9 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.pawparty.paw_party"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Places SDK 5.x requires API 24 (Android 7.0); covers 99%+ of active devices.
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -53,4 +51,6 @@ dependencies {
     // Native debug App Check before Flutter engine starts (see PawPartyApplication).
     implementation(platform("com.google.firebase:firebase-bom:33.14.0"))
     implementation("com.google.firebase:firebase-appcheck-debug")
+    // Native Places SDK (New) — Nearby Search for vet clinic picker.
+    implementation("com.google.android.libraries.places:places:5.1.1")
 }

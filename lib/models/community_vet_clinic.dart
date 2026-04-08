@@ -22,6 +22,14 @@ class CommunityVetClinic {
   /// Distinct pet owners (families) linked to this clinic.
   final int linkedOwnerCount;
 
+  /// Google Place ID when pets linked this clinic via Places (`dedupeKey` is `place:…`).
+  /// Use with Maps URLs to open the full listing (reviews, hours, photos).
+  String? get googlePlaceId {
+    if (!dedupeKey.startsWith('place:')) return null;
+    final id = dedupeKey.substring(6).trim();
+    return id.isEmpty ? null : id;
+  }
+
   /// Stable key: Google Place ID when set, else normalized name + address.
   static String dedupeKeyForPet(Pet p) {
     final place = p.vetGooglePlaceId?.trim();

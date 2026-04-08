@@ -36,6 +36,9 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
 
   // Step 2: Location & amenities
   final _addressController = TextEditingController();
+  final _venueNameController = TextEditingController();
+  bool _isPublic = false;
+  int _maxGuests = 20;
   bool _hasYard = false;
   bool _hasPool = false;
   bool _kidFriendly = true;
@@ -53,6 +56,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
     _titleController.dispose();
     _descController.dispose();
     _addressController.dispose();
+    _venueNameController.dispose();
     super.dispose();
   }
 
@@ -161,10 +165,11 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
       final lng = user.longitude ?? kFallbackMapLng;
       final myPetIds = ref.read(userPetsProvider).map((p) => p.id).toList();
 
+      final venueName = _venueNameController.text.trim();
       final meetup = Meetup(
         id: const Uuid().v4(),
         hostId: user.id,
-        hostName: user.displayName,
+        hostName: user.eventHostDisplayName,
         hostPhotoUrl: user.photoUrl,
         title: title,
         description: _descController.text.trim().isEmpty
@@ -176,7 +181,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
         address: address,
         latitude: lat,
         longitude: lng,
-        maxGuests: 0,
+        maxGuests: _isPublic ? _maxGuests : 0,
         invites: const [],
         pizzaCommitment: PizzaCommitment(
           willProvidePizza: _willProvidePizza,
@@ -190,6 +195,8 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
         kidFriendly: _kidFriendly,
         compatiblePetIds: myPetIds,
         createdAt: DateTime.now(),
+        isPublic: _isPublic,
+        venueName: venueName.isEmpty ? null : venueName,
       );
 
       await FirestoreMeetupRepository.createMeetup(meetup);
@@ -199,15 +206,27 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
           );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Party created! Now invite your friends.'),
-          backgroundColor: PawPartyColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      );
-      context.go('/invite-friends/${meetup.id}');
+      if (_isPublic) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Public event created! Nearby pet owners can now discover it.'),
+            backgroundColor: PawPartyColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        context.go('/home');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Party created! Now invite your friends.'),
+            backgroundColor: PawPartyColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        context.go('/invite-friends/${meetup.id}');
+      }
     } catch (e) {
       if (!mounted) return;
       final es = e.toString();
@@ -445,6 +464,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
   }
 
   Widget _buildStep2Location() {
+    final user = ref.watch(authStateProvider).user;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -459,34 +479,100 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 24),
-          TextFormField(
-            controller: _addressController,
-            decoration: const InputDecoration(
-              labelText: 'Address',
-              hintText: 'Your home address',
-              prefixIcon: Icon(Icons.location_on),
-            ),
+          _amenityToggle(
+            'Open to everyone nearby',
+            Icons.public,
+            _isPublic,
+            (v) => setState(() => _isPublic = v),
           ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: PawPartyColors.secondary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.shield, size: 16, color: PawPartyColors.secondary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Your exact address is only shared after guests accept your invite.',
-                    style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+          if (_isPublic) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: PawPartyColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.campaign, size: 16, color: PawPartyColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This event will appear on the Discover screen for all nearby pet owners.',
+                      style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                    ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _venueNameController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Venue / Business Name',
+                hintText: 'e.g., Riverside Pet Clinic',
+                prefixIcon: Icon(Icons.storefront),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Guest limit', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.group, size: 20, color: PawPartyColors.textSecondary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Slider(
+                    value: _maxGuests.toDouble(),
+                    min: 5,
+                    max: 100,
+                    divisions: 19,
+                    activeColor: PawPartyColors.primary,
+                    label: '$_maxGuests guests',
+                    onChanged: (v) => setState(() => _maxGuests = v.round()),
+                  ),
+                ),
+                Text(
+                  '$_maxGuests',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
               ],
             ),
+          ],
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _addressController,
+            decoration: InputDecoration(
+              labelText: 'Address',
+              hintText: _isPublic ? 'Venue address' : 'Your home address',
+              prefixIcon: const Icon(Icons.location_on),
+            ),
           ),
+          const SizedBox(height: 8),
+          if (!_isPublic)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: PawPartyColors.secondary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.shield, size: 16, color: PawPartyColors.secondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Your exact address is only shared after guests accept your invite.',
+                      style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 24),
           Text('Amenities', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
@@ -498,12 +584,14 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
           const SizedBox(height: 24),
           HostVenueMap(
             height: 200,
-            anchorLatitude: ref.watch(authStateProvider).user?.latitude,
-            anchorLongitude: ref.watch(authStateProvider).user?.longitude,
+            anchorLatitude: user?.latitude,
+            anchorLongitude: user?.longitude,
           ),
           const SizedBox(height: 8),
           Text(
-            'Guests see this general area until they accept your invite. Your street address stays private until then.',
+            _isPublic
+                ? 'Your venue location is visible to everyone on the Discover map.'
+                : 'Guests see this general area until they accept your invite. Your street address stays private until then.',
             style: TextStyle(
               fontSize: 12,
               height: 1.35,

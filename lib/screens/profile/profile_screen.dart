@@ -558,6 +558,26 @@ void _openProfileSettings(
               _showDisplayNameEditor(context, ref, user);
             },
           ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Icon(
+              Icons.storefront,
+              color: user.isBusinessAccount ? PawPartyColors.primary : null,
+            ),
+            title: const Text('Business account'),
+            subtitle: Text(
+              user.isBusinessAccount
+                  ? user.businessName ?? 'Set up your business profile'
+                  : 'Host public events as a local business',
+            ),
+            trailing: user.isBusinessAccount
+                ? const Icon(Icons.check_circle, color: PawPartyColors.primary)
+                : null,
+            onTap: () {
+              Navigator.pop(ctx);
+              _showBusinessEditor(context, ref, user);
+            },
+          ),
         ],
       ),
     ),
@@ -643,4 +663,106 @@ Future<void> _showDisplayNameEditor(
   final trimmed = submitted.trim();
   if (trimmed.isEmpty) return;
   await ref.read(authStateProvider.notifier).updateDisplayName(trimmed);
+}
+
+const _businessCategories = [
+  'Veterinary Clinic',
+  'Pet Store',
+  'Groomer',
+  'Dog Park',
+  'Training',
+  'Boarding / Daycare',
+  'Other',
+];
+
+Future<void> _showBusinessEditor(
+  BuildContext context,
+  WidgetRef ref,
+  UserProfile user,
+) async {
+  final nameCtrl = TextEditingController(text: user.businessName ?? '');
+  String selectedCategory = user.businessCategory ?? _businessCategories.first;
+  bool enabled = user.isBusinessAccount;
+
+  final result = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (ctx) {
+      return StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Business account'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enable business profile'),
+                  value: enabled,
+                  activeColor: PawPartyColors.primary,
+                  onChanged: (v) => setDialogState(() => enabled = v),
+                ),
+                if (enabled) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Business name',
+                      hintText: 'e.g., Happy Paws Clinic',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.storefront),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _businessCategories.contains(selectedCategory)
+                        ? selectedCategory
+                        : _businessCategories.first,
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.category_outlined),
+                    ),
+                    items: _businessCategories
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() => selectedCategory = v);
+                      }
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, {
+                'enabled': enabled,
+                'name': nameCtrl.text.trim(),
+                'category': selectedCategory,
+              }),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+  nameCtrl.dispose();
+  if (!context.mounted || result == null) return;
+
+  final isEnabled = result['enabled'] as bool;
+  final updated = user.copyWithBusiness(
+    isBusinessAccount: isEnabled,
+    businessName: isEnabled ? result['name'] as String? : null,
+    businessCategory: isEnabled ? result['category'] as String? : null,
+    clearBusinessFields: !isEnabled,
+  );
+  ref.read(authStateProvider.notifier).updateUser(updated);
 }

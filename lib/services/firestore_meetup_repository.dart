@@ -49,6 +49,9 @@ class FirestoreMeetupRepository {
       'kidFriendly': m.kidFriendly,
       'compatiblePetIds': m.compatiblePetIds,
       'createdAt': Timestamp.fromDate(m.createdAt),
+      'isPublic': m.isPublic,
+      'venueName': m.venueName,
+      'venuePlaceId': m.venuePlaceId,
     };
   }
 
@@ -100,6 +103,70 @@ class FirestoreMeetupRepository {
       list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
       return list;
     });
+  }
+
+  /// All public meetups that are open or full, sorted soonest-first.
+  /// Client should filter by distance and future date.
+  static Stream<List<Meetup>> watchPublicMeetups() {
+    return _meetups
+        .where('isPublic', isEqualTo: true)
+        .snapshots()
+        .map((snap) {
+      final now = DateTime.now();
+      final list = snap.docs
+          .map(meetupFromSnapshot)
+          .where((m) =>
+              m.dateTime.isAfter(now) &&
+              (m.status == MeetupStatus.open || m.status == MeetupStatus.full))
+          .toList();
+      list.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      return list;
+    });
+  }
+
+  /// Self-RSVP to a public meetup (creates a partyInvites doc where guest == host of the doc).
+  static Future<void> rsvpToPublicMeetup({
+    required String meetupId,
+    required String meetupTitle,
+    required String hostId,
+    required String hostName,
+    required String guestId,
+    required String guestName,
+  }) async {
+    final existing = await _partyInvites
+        .where('meetupId', isEqualTo: meetupId)
+        .where('guestId', isEqualTo: guestId)
+        .get();
+    if (existing.docs.isNotEmpty) return;
+
+    await _partyInvites.doc().set({
+      'meetupId': meetupId,
+      'meetupTitle': meetupTitle,
+      'hostId': hostId,
+      'hostName': hostName,
+      'guestId': guestId,
+      'guestName': guestName,
+      'status': 'accepted',
+      'sentAt': FieldValue.serverTimestamp(),
+      'respondedAt': FieldValue.serverTimestamp(),
+      'selfRsvp': true,
+    });
+  }
+
+  /// Cancel a self-RSVP (guest deletes their own invite doc).
+  static Future<void> cancelRsvp({
+    required String meetupId,
+    required String actingUid,
+  }) async {
+    final snap = await _partyInvites
+        .where('meetupId', isEqualTo: meetupId)
+        .where('guestId', isEqualTo: actingUid)
+        .get();
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   // ---------------------------------------------------------------------------

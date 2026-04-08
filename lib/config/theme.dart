@@ -163,9 +163,12 @@ class PawPartyTheme {
       chipTheme: ChipThemeData(
         backgroundColor: PawPartyColors.warmOak.withValues(alpha: 0.35),
         selectedColor: PawPartyColors.primary.withValues(alpha: 0.15),
+        // Must set color: labelLarge in textTheme is white (for filled buttons); chips
+        // would otherwise use that and become unreadable on light chip backgrounds.
         labelStyle: GoogleFonts.nunito(
           fontSize: 13,
           fontWeight: FontWeight.w600,
+          color: PawPartyColors.textPrimary,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),

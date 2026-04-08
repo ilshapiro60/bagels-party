@@ -24,7 +24,10 @@ class ExpandableMapFrame extends StatelessWidget {
   final bool expandable;
 
   void _openFullscreen(BuildContext context) {
-    Navigator.of(context).push(
+    // Use root navigator: Discover lives under GoRouter's ShellRoute (nested navigator).
+    // Pushing a fullscreen map on the shell stack can trip framework assertions
+    // ('_dependents.isEmpty') when the route disposes alongside platform views (Android).
+    Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
         builder: (ctx) => Scaffold(

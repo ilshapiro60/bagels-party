@@ -25,6 +25,7 @@ import '../services/auth_persistence.dart';
 import '../services/device_location_service.dart';
 import '../services/firebase_user_mapper.dart';
 import '../services/firestore_meetup_repository.dart';
+import '../services/firestore_story_repository.dart';
 import '../services/firestore_passport_repository.dart';
 import '../services/firestore_pet_buddy_repository.dart';
 import '../services/firestore_neighborhood_news_repository.dart';
@@ -650,6 +651,12 @@ final incomingPartyInvitesProvider =
   return FirestoreMeetupRepository.watchIncomingInvites(uid);
 });
 
+/// All public / open events (for Discover Events tab). Client-side distance filter.
+final publicMeetupsProvider = StreamProvider<List<Meetup>>((ref) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreMeetupRepository.watchPublicMeetups();
+});
+
 /// Party invites for a meetup (host-only query shape for Firestore rules).
 final partyInvitesForHostedMeetupProvider = StreamProvider.family<
     List<PartyInvite>,
@@ -748,20 +755,15 @@ class SelectedTabNotifier extends Notifier<int> {
   }
 }
 
-final partyStoriesProvider =
-    NotifierProvider<PartyStoriesNotifier, List<PartyStory>>(
-  PartyStoriesNotifier.new,
-);
+/// Stories by the current user (for "My stories" screen).
+final myPartyStoriesProvider =
+    StreamProvider.family<List<PartyStory>, String>((ref, authorId) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreStoryRepository.watchStoriesByAuthor(authorId);
+});
 
-class PartyStoriesNotifier extends Notifier<List<PartyStory>> {
-  @override
-  List<PartyStory> build() => [];
-
-  void addStory(PartyStory story) {
-    state = [story, ...state];
-  }
-
-  void removeStoriesForMeetup(String meetupId) {
-    state = state.where((s) => s.meetupId != meetupId).toList();
-  }
-}
+/// Community stories from the last 30 days (for Discover Events tab).
+final communityStoriesProvider = StreamProvider<List<PartyStory>>((ref) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreStoryRepository.watchCommunityStories();
+});

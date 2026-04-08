@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import '../../config/map_platform.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../models/pet.dart';
@@ -17,6 +18,7 @@ import '../../widgets/personality_slider.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_pet_repository.dart';
 import '../../services/vet_clinic_geocode.dart';
+import '../vet_clinic_map_picker_screen.dart';
 
 class CreatePetScreen extends ConsumerStatefulWidget {
   const CreatePetScreen({super.key, this.editPetId, this.initialPet});
@@ -67,6 +69,7 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
   final _vetAddressController = TextEditingController();
   double? _vetLat;
   double? _vetLng;
+  String? _vetGooglePlaceId;
   bool _vetGeocoding = false;
   bool _isSpayedNeutered = false;
   bool _isVaccinated = false;
@@ -180,6 +183,7 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
     _vetAddressController.text = p.vetClinicAddress ?? '';
     _vetLat = p.vetClinicLatitude;
     _vetLng = p.vetClinicLongitude;
+    _vetGooglePlaceId = p.vetGooglePlaceId;
     _isSpayedNeutered = p.isSpayedNeutered;
     _isVaccinated = p.isVaccinated;
   }
@@ -234,6 +238,44 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
     } finally {
       if (mounted) setState(() => _vetGeocoding = false);
     }
+  }
+
+  void _onVetFieldsEdited() {
+    setState(() {
+      _vetGooglePlaceId = null;
+      if (_vetNameController.text.trim().isEmpty) {
+        _vetLat = null;
+        _vetLng = null;
+      }
+    });
+  }
+
+  Future<void> _openVetMapPicker() async {
+    if (!vetClinicMapPickerSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Maps clinic picker is available on the iOS and Android apps.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final user = ref.read(authStateProvider).user;
+    final picked = await openVetClinicMapPicker(
+      context,
+      fallbackLatitude: user?.latitude,
+      fallbackLongitude: user?.longitude,
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      _vetNameController.text = picked.name;
+      _vetAddressController.text = picked.address;
+      _vetLat = picked.latitude;
+      _vetLng = picked.longitude;
+      _vetGooglePlaceId = picked.placeId;
+    });
   }
 
   Future<void> _nextStep() async {
@@ -433,12 +475,12 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
         ownerApproxLat: isEdit ? _baselinePet!.ownerApproxLat : null,
         ownerApproxLng: isEdit ? _baselinePet!.ownerApproxLng : null,
         vetClinicName: vetName.isEmpty ? null : vetName,
-        vetClinicAddress: vetAddr.isEmpty ? null : vetAddr,
+        vetClinicAddress: vetName.isEmpty
+            ? null
+            : (vetAddr.isEmpty ? null : vetAddr),
         vetClinicLatitude: vetName.isEmpty ? null : vetLat,
         vetClinicLongitude: vetName.isEmpty ? null : vetLng,
-        vetGooglePlaceId: isEdit && vetName.isNotEmpty
-            ? _baselinePet!.vetGooglePlaceId
-            : null,
+        vetGooglePlaceId: vetName.isEmpty ? null : _vetGooglePlaceId,
       );
 
       if (isEdit) {
@@ -1180,7 +1222,7 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
           TextFormField(
             controller: _vetNameController,
             textCapitalization: TextCapitalization.words,
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) => _onVetFieldsEdited(),
             decoration: const InputDecoration(
               labelText: 'Clinic name',
               hintText: 'Optional — visible like your pet on Discover',
@@ -1191,12 +1233,55 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
             controller: _vetAddressController,
             textCapitalization: TextCapitalization.sentences,
             maxLines: 2,
-            onChanged: (_) => setState(() {}),
+            onChanged: (_) => _onVetFieldsEdited(),
             decoration: const InputDecoration(
               labelText: 'Clinic address',
               hintText: 'Helps neighbors recognize the clinic',
             ),
           ),
+          const SizedBox(height: 12),
+          if (vetClinicMapPickerSupported)
+            FilledButton.tonalIcon(
+              onPressed: _openVetMapPicker,
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('Find clinic on map'),
+            ),
+          if (vetClinicMapPickerSupported) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Pick a clinic to save a Google Maps link for neighbors. You can still edit the text below.',
+              style: TextStyle(
+                fontSize: 12,
+                color: PawPartyColors.textSecondary,
+                height: 1.35,
+              ),
+            ),
+          ],
+          if (_vetGooglePlaceId != null &&
+              _vetNameController.text.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 18,
+                    color: PawPartyColors.success,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Clinic linked for rich Google Maps (reviews & hours).',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: PawPartyColors.textSecondary,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: _vetGeocoding ? null : _lookUpVetCoordinates,

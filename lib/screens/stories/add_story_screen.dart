@@ -7,6 +7,7 @@ import '../../config/theme.dart';
 import '../../models/party_story.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
+import '../../services/firestore_story_repository.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/fullscreen_video.dart';
 import '../../widgets/paw_file_image.dart';
@@ -124,9 +125,12 @@ class _AddStoryScreenState extends ConsumerState<AddStoryScreen> {
         authorPhotoPath: user.photoUrl,
         imagePaths: imagePaths,
         videoPaths: videoPaths,
+        latitude: user.latitude,
+        longitude: user.longitude,
+        neighborhoodKey: user.neighborhoodKey,
       );
 
-      ref.read(partyStoriesProvider.notifier).addStory(story);
+      await FirestoreStoryRepository.createStory(story);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Story posted!')),
