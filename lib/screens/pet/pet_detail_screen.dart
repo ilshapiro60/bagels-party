@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,10 +11,21 @@ import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_pet_buddy_repository.dart';
+import '../../services/firestore_pet_repository.dart';
+import '../../services/vet_clinic_geocode.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/fullscreen_video.dart';
 import '../../widgets/paw_file_image.dart';
 import '../../widgets/paw_video_thumb.dart';
+
+String _firebaseErrorSnackText(Object e) {
+  if (e is FirebaseException) {
+    final msg = e.message?.trim();
+    if (msg != null && msg.isNotEmpty) return '${e.code}: $msg';
+    return e.code;
+  }
+  return e.toString();
+}
 
 void _invalidatePetBuddyCaches(WidgetRef ref) {
   for (final p in ref.read(userPetsProvider)) {
@@ -93,6 +105,7 @@ class PetDetailScreen extends ConsumerWidget {
           ],
           _PetProfileHeader(pet: pet, isMine: isMine),
           _PetBuddiesStrip(profilePetId: pet.id, isMine: isMine),
+          _VetClinicSection(pet: pet, isMine: isMine),
           if (pet.bio != null && pet.bio!.isNotEmpty) ...[
             const SizedBox(height: 16),
             Text(pet.bio!, style: Theme.of(context).textTheme.bodyMedium),
@@ -198,7 +211,21 @@ class _PetProfileHeaderState extends ConsumerState<_PetProfileHeader> {
       final url = await FirebaseStorageService.instance.uploadPetAvatar(
         localPath: path,
         petId: widget.pet.id,
+        allowLocalFallback: false,
       );
+      if (!FirestorePetRepository.isShareableMediaUrl(url)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not upload photo. Check your connection and try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
       final updated = widget.pet.copyWith(photoUrl: url);
       await ref.read(userPetsProvider.notifier).updatePet(updated);
       if (mounted) {
@@ -209,6 +236,27 @@ class _PetProfileHeaderState extends ConsumerState<_PetProfileHeader> {
                   ? "${widget.pet.name}'s profile photo was updated"
                   : "${widget.pet.name}'s profile photo was added",
             ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not upload photo (${_firebaseErrorSnackText(e)}). '
+              'If this is not the network, check Firebase Storage rules and App Check.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not upload photo: ${_firebaseErrorSnackText(e)}'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -543,10 +591,21 @@ Future<void> _onBefriendTap(
         behavior: SnackBarBehavior.floating,
       ),
     );
+  } on FirebaseException catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Could not send request (${_firebaseErrorSnackText(e)})'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   } catch (e) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Could not save: $e')),
+      SnackBar(
+        content: Text('Could not send request: $e'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 }
@@ -906,11 +965,46 @@ class _OwnerMediaActionsState extends ConsumerState<_OwnerMediaActions> {
       final url = await FirebaseStorageService.instance.uploadPetGalleryPhoto(
         localPath: path,
         petId: widget.pet.id,
+        allowLocalFallback: false,
       );
+      if (!FirestorePetRepository.isShareableMediaUrl(url)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not upload photo. Check your connection and try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
       final updated = widget.pet.copyWith(
         photoGallery: [...widget.pet.photoGallery, url],
       );
       await ref.read(userPetsProvider.notifier).updatePet(updated);
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not upload photo (${_firebaseErrorSnackText(e)}). '
+              'If this is not the network, check Firebase Storage rules and App Check.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not upload photo: ${_firebaseErrorSnackText(e)}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -950,11 +1044,46 @@ class _OwnerMediaActionsState extends ConsumerState<_OwnerMediaActions> {
       final url = await FirebaseStorageService.instance.uploadPetVideo(
         localPath: path,
         petId: widget.pet.id,
+        allowLocalFallback: false,
       );
+      if (!FirestorePetRepository.isShareableMediaUrl(url)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not upload video. Check your connection and try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
       final updated = widget.pet.copyWith(
         videoPaths: [...widget.pet.videoPaths, url],
       );
       await ref.read(userPetsProvider.notifier).updatePet(updated);
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not upload video (${_firebaseErrorSnackText(e)}). '
+              'If this is not the network, check Firebase Storage rules and App Check.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not upload video: ${_firebaseErrorSnackText(e)}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -982,6 +1111,375 @@ class _OwnerMediaActionsState extends ConsumerState<_OwnerMediaActions> {
           onPressed: _busy ? null : _addVideo,
         ),
       ],
+    );
+  }
+}
+
+class _VetClinicSection extends ConsumerWidget {
+  const _VetClinicSection({required this.pet, required this.isMine});
+
+  final Pet pet;
+  final bool isMine;
+
+  void _openEditor(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+        child: _VetClinicEditorSheet(pet: pet),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!isMine && !pet.hasVetClinicLink) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Text('Veterinary clinic', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (isMine)
+          Material(
+            color: PawPartyColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              onTap: () => _openEditor(context, ref),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: PawPartyColors.divider),
+                ),
+                child: pet.hasVetClinicLink
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            pet.vetClinicName!.trim(),
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          if (pet.vetClinicAddress != null &&
+                              pet.vetClinicAddress!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              pet.vetClinicAddress!,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: PawPartyColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tap to edit',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: PawPartyColors.textHint,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Icon(Icons.add_circle_outline, color: PawPartyColors.primary),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Add clinic',
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          )
+        else if (pet.hasVetClinicLink)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: PawPartyColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: PawPartyColors.divider),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  pet.vetClinicName!.trim(),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (pet.vetClinicAddress != null &&
+                    pet.vetClinicAddress!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    pet.vetClinicAddress!,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: PawPartyColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (isMine) ...[
+          const SizedBox(height: 8),
+          Text(
+            'This clinic name and address are visible to others the same way your pet’s profile appears on Discover.',
+            style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary, height: 1.35),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _VetClinicEditorSheet extends ConsumerStatefulWidget {
+  const _VetClinicEditorSheet({required this.pet});
+
+  final Pet pet;
+
+  @override
+  ConsumerState<_VetClinicEditorSheet> createState() =>
+      _VetClinicEditorSheetState();
+}
+
+class _VetClinicEditorSheetState extends ConsumerState<_VetClinicEditorSheet> {
+  late final TextEditingController _name;
+  late final TextEditingController _address;
+  bool _geocoding = false;
+  bool _saving = false;
+  double? _lat;
+  double? _lng;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.pet.vetClinicName ?? '');
+    _address = TextEditingController(text: widget.pet.vetClinicAddress ?? '');
+    _lat = widget.pet.vetClinicLatitude;
+    _lng = widget.pet.vetClinicLongitude;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _address.dispose();
+    super.dispose();
+  }
+
+  Future<void> _lookUpCoordinates() async {
+    final addr = _address.text.trim();
+    if (addr.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter an address first.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _geocoding = true);
+    try {
+      final g = await tryGeocodeVetAddress(addr);
+      if (!mounted) return;
+      if (g == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No coordinates found. Try simplifying the address or check your connection.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _lat = g.lat;
+        _lng = g.lng;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Coordinates saved for this clinic.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _geocoding = false);
+    }
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Clinic name is required.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final addr = _address.text.trim();
+    setState(() => _saving = true);
+    try {
+      var lat = _lat;
+      var lng = _lng;
+      if (addr.isNotEmpty && (lat == null || lng == null)) {
+        final g = await tryGeocodeVetAddress(addr);
+        if (g != null) {
+          lat = g.lat;
+          lng = g.lng;
+          if (mounted) {
+            setState(() {
+              _lat = lat;
+              _lng = lng;
+            });
+          }
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Saved clinic without map pin — we could not find coordinates for that address. '
+                'Check the address or try again later.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+      final updated = widget.pet.copyWith(
+        vetClinicName: name,
+        vetClinicAddress: addr.isEmpty ? null : addr,
+        vetClinicLatitude: lat,
+        vetClinicLongitude: lng,
+      );
+      await ref.read(userPetsProvider.notifier).updatePet(updated);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save: ${_firebaseErrorSnackText(e)}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _clearLink() async {
+    setState(() => _saving = true);
+    try {
+      final updated = widget.pet.copyWith(clearVetClinicLink: true);
+      await ref.read(userPetsProvider.notifier).updatePet(updated);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not clear: ${_firebaseErrorSnackText(e)}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Link veterinary clinic',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _name,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Clinic name',
+                hintText: 'Required',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _address,
+              textCapitalization: TextCapitalization.sentences,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Address',
+                hintText: 'Recommended for others to find the clinic',
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _geocoding || _saving ? null : _lookUpCoordinates,
+              icon: _geocoding
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.pin_drop_outlined),
+              label: const Text('Look up coordinates'),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tip: Saving also looks up coordinates when an address is set, so your clinic can appear on the map.',
+              style: TextStyle(fontSize: 11, color: PawPartyColors.textHint, height: 1.3),
+            ),
+            if (_lat != null && _lng != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Coordinates: ${_lat!.toStringAsFixed(5)}, ${_lng!.toStringAsFixed(5)}',
+                  style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              'Linked clinic details are visible to signed-in members like your pet on Discover.',
+              style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary, height: 1.35),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Save'),
+            ),
+            if (widget.pet.hasVetClinicLink) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _saving ? null : _clearLink,
+                child: const Text('Remove clinic link'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

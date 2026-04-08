@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/meetup.dart';
+import '../models/party_invite.dart';
 
 class FirestoreMeetupRepository {
   FirestoreMeetupRepository._();
@@ -71,6 +72,12 @@ class FirestoreMeetupRepository {
     await _meetups.doc(meetup.id).set(meetupToFirestore(meetup));
   }
 
+  static Future<Meetup?> fetchMeetup(String meetupId) async {
+    final snap = await _meetups.doc(meetupId).get();
+    if (!snap.exists) return null;
+    return meetupFromSnapshot(snap);
+  }
+
   /// Removes the party document. Only the host may delete ([actingHostId]).
   static Future<void> deleteMeetup({
     required String meetupId,
@@ -92,6 +99,138 @@ class FirestoreMeetupRepository {
       final list = snap.docs.map(meetupFromSnapshot).toList();
       list.sort((a, b) => b.dateTime.compareTo(a.dateTime));
       return list;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Party invites (separate collection for clean security rules)
+  // ---------------------------------------------------------------------------
+
+  static CollectionReference<Map<String, dynamic>> get _partyInvites =>
+      _db.collection('partyInvites');
+
+  static PartyInvite _inviteFromDoc(
+    DocumentSnapshot<Map<String, dynamic>> snap,
+  ) {
+    final m = Map<String, dynamic>.from(snap.data() ?? {});
+    if (m['sentAt'] is Timestamp) {
+      m['sentAt'] = (m['sentAt'] as Timestamp).toDate().toIso8601String();
+    }
+    if (m['respondedAt'] is Timestamp) {
+      m['respondedAt'] =
+          (m['respondedAt'] as Timestamp).toDate().toIso8601String();
+    }
+    return PartyInvite.fromFirestore(snap.id, m);
+  }
+
+  /// Creates invite documents for each selected friend.
+  static Future<void> sendPartyInvites({
+    required String meetupId,
+    required String meetupTitle,
+    required String hostId,
+    required String hostName,
+    required List<({String uid, String displayName})> guests,
+  }) async {
+    final batch = _db.batch();
+    for (final g in guests) {
+      final ref = _partyInvites.doc();
+      batch.set(ref, {
+        'meetupId': meetupId,
+        'meetupTitle': meetupTitle,
+        'hostId': hostId,
+        'hostName': hostName,
+        'guestId': g.uid,
+        'guestName': g.displayName,
+        'status': 'pending',
+        'sentAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  /// Invitations the current user has received (pending first, newest first).
+  static Stream<List<PartyInvite>> watchIncomingInvites(String guestId) {
+    return _partyInvites
+        .where('guestId', isEqualTo: guestId)
+        .snapshots()
+        .map((snap) {
+      final list = snap.docs.map(_inviteFromDoc).toList();
+      list.sort((a, b) {
+        final statusOrder = {
+          PartyInviteStatus.pending: 0,
+          PartyInviteStatus.accepted: 1,
+          PartyInviteStatus.declined: 2,
+        };
+        final cmp = statusOrder[a.status]!.compareTo(statusOrder[b.status]!);
+        if (cmp != 0) return cmp;
+        return b.sentAt.compareTo(a.sentAt);
+      });
+      return list;
+    });
+  }
+
+  /// Invitations the host sent for this meetup (must filter by [hostId] so
+  /// Firestore rules can authorize the list query).
+  static Stream<List<PartyInvite>> watchInvitesForMeetupAsHost({
+    required String meetupId,
+    required String hostId,
+  }) {
+    return _partyInvites
+        .where('meetupId', isEqualTo: meetupId)
+        .where('hostId', isEqualTo: hostId)
+        .snapshots()
+        .map((snap) => snap.docs.map(_inviteFromDoc).toList());
+  }
+
+  /// Guest IDs that already have a pending or accepted invite (for UI filters).
+  static Future<Set<String>> guestIdsWithActiveInvite({
+    required String meetupId,
+    required String hostId,
+  }) async {
+    final snap = await _partyInvites
+        .where('meetupId', isEqualTo: meetupId)
+        .where('hostId', isEqualTo: hostId)
+        .get();
+    final out = <String>{};
+    for (final d in snap.docs) {
+      final m = d.data();
+      final st = m['status'] as String? ?? '';
+      if (st == 'pending' || st == 'accepted') {
+        final gid = m['guestId'] as String?;
+        if (gid != null) out.add(gid);
+      }
+    }
+    return out;
+  }
+
+  /// Host removes an invite (pending, accepted, or declined).
+  static Future<void> deletePartyInvite({
+    required String inviteId,
+    required String actingHostId,
+  }) async {
+    final docRef = _partyInvites.doc(inviteId);
+    final snap = await docRef.get();
+    if (!snap.exists) return;
+    final data = snap.data();
+    if (data == null || data['hostId'] != actingHostId) {
+      throw StateError('Only the host can remove this invite.');
+    }
+    await docRef.delete();
+  }
+
+  static Future<void> respondToInvite({
+    required String inviteId,
+    required String actingUid,
+    required PartyInviteStatus response,
+  }) async {
+    final ref = _partyInvites.doc(inviteId);
+    final snap = await ref.get();
+    if (!snap.exists) throw StateError('Invite not found');
+    final data = snap.data()!;
+    if (data['guestId'] != actingUid) throw StateError('Not authorized');
+    await ref.update({
+      'status': response.name,
+      'respondedAt': FieldValue.serverTimestamp(),
     });
   }
 }

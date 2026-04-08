@@ -10,6 +10,9 @@ plugins {
 
 android {
     namespace = "com.pawparty.paw_party"
+    buildFeatures {
+        buildConfig = true
+    }
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -44,4 +47,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Native debug App Check before Flutter engine starts (see PawPartyApplication).
+    implementation(platform("com.google.firebase:firebase-bom:33.14.0"))
+    implementation("com.google.firebase:firebase-appcheck-debug")
 }

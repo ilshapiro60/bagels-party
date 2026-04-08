@@ -1,4 +1,4 @@
-# Bagel's Party (Flutter) — Codemagic iOS → TestFlight (Apple Developer required).
+# Paw Party (Flutter) — Codemagic iOS → TestFlight (Apple Developer required).
 #
 # Repository: commit `codemagic.yaml` at the Flutter project root, then add this repo in Codemagic
 # and select workflow "iOS Release (TestFlight)".
@@ -50,6 +50,8 @@ workflows:
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
+      - name: Flutter analyze
+        script: flutter analyze
       - name: Install CocoaPods dependencies
         script: cd ios && pod install
       - name: Set up code signing settings on Xcode project

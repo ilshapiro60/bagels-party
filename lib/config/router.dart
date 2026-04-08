@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/neighborhood_news.dart';
 import '../models/pet.dart';
 import '../providers/app_providers.dart';
 import '../screens/auth/login_screen.dart';
@@ -9,14 +10,22 @@ import '../screens/auth/register_screen.dart';
 import '../screens/auth/onboarding_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/discover/discover_screen.dart';
+import '../screens/discover/community_vet_clinics_screen.dart';
 import '../screens/create_pet/create_pet_screen.dart';
 import '../screens/meetup/host_meetup_screen.dart';
 import '../screens/passport/passport_screen.dart';
+import '../screens/passport/add_passport_entry_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/stories/party_stories_screen.dart';
 import '../screens/stories/add_story_screen.dart';
 import '../screens/pet/pet_detail_screen.dart';
 import '../screens/friends/friends_screen.dart';
+import '../screens/meetup/invite_friends_screen.dart';
+import '../screens/meetup/manage_party_guests_screen.dart';
+import '../screens/neighborhood_news/neighborhood_news_compose_screen.dart';
+import '../screens/neighborhood_news/neighborhood_news_feed_screen.dart';
+import '../screens/neighborhood_news/neighborhood_news_moderation_screen.dart';
+import '../screens/neighborhood_news/neighborhood_news_post_detail_screen.dart';
 import '../widgets/nav_shell.dart';
 import 'auth_router_refresh.dart';
 
@@ -93,6 +102,10 @@ final appRouter = GoRouter(
       ],
     ),
     GoRoute(
+      path: '/community-vet-clinics',
+      builder: (context, state) => const CommunityVetClinicsScreen(),
+    ),
+    GoRoute(
       path: '/pet/:id',
       builder: (context, state) => PetDetailScreen(
         petId: state.pathParameters['id']!,
@@ -126,6 +139,50 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/friends',
       builder: (context, state) => const FriendsScreen(),
+    ),
+    GoRoute(
+      path: '/invite-friends/:meetupId',
+      builder: (context, state) => InviteFriendsScreen(
+        meetupId: state.pathParameters['meetupId']!,
+      ),
+    ),
+    GoRoute(
+      path: '/party-guests/:meetupId',
+      builder: (context, state) => ManagePartyGuestsScreen(
+        meetupId: state.pathParameters['meetupId']!,
+      ),
+    ),
+    GoRoute(
+      path: '/add-passport-entry',
+      builder: (context, state) {
+        final extra = state.extra;
+        final initialPetId = extra is String ? extra : null;
+        return AddPassportEntryScreen(initialPetId: initialPetId);
+      },
+    ),
+    GoRoute(
+      path: '/neighborhood-news',
+      builder: (context, state) => const NeighborhoodNewsFeedScreen(),
+    ),
+    GoRoute(
+      path: '/neighborhood-news/new',
+      builder: (context, state) => const NeighborhoodNewsComposeScreen(),
+    ),
+    GoRoute(
+      path: '/neighborhood-news/post/:postId',
+      builder: (context, state) {
+        final id = state.pathParameters['postId']!;
+        final extra = state.extra;
+        final initial = extra is NeighborhoodNewsPost ? extra : null;
+        return NeighborhoodNewsPostDetailScreen(
+          postId: id,
+          initialPost: initial,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/moderation/neighborhood-news',
+      builder: (context, state) => const NeighborhoodNewsModerationScreen(),
     ),
   ],
 );

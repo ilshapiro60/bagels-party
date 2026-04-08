@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../models/community_vet_clinic.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
 
@@ -115,4 +116,46 @@ List<Pet> petsWithinRadiusMiles(
     final them = ownerApproximateArea(p, viewer: viewer);
     return haversineMeters(you, them) <= maxM;
   }).toList();
+}
+
+/// Clinics within [radiusMiles] of the viewer's saved profile coordinates.
+/// Entries without coordinates stay included (they cannot be distance-filtered).
+List<CommunityVetClinic> vetClinicsWithinRadiusMiles(
+  List<CommunityVetClinic> clinics,
+  UserProfile? viewer,
+  double radiusMiles,
+) {
+  if (!profileHasMapCoordinates(viewer)) {
+    return List<CommunityVetClinic>.from(clinics);
+  }
+  final ulat = viewer!.latitude!;
+  final ulng = viewer.longitude!;
+  final maxM = radiusMiles * 1609.34;
+  return clinics.where((c) {
+    final plat = c.latitude;
+    final plng = c.longitude;
+    if (plat == null || plng == null) return true;
+    final d = haversineMeters(GeoPoint(ulat, ulng), GeoPoint(plat, plng));
+    return d <= maxM;
+  }).toList();
+}
+
+/// Map anchor for the vet-clinics discover tab: viewer fuzzy point, else centroid of geocoded clinics, else US fallback.
+GeoPoint vetClinicsMapAnchor(UserProfile? user, List<CommunityVetClinic> clinics) {
+  if (profileHasMapCoordinates(user)) {
+    return viewerMapPoint(user);
+  }
+  final withCoords = clinics.where((c) => c.latitude != null && c.longitude != null).toList();
+  if (withCoords.isNotEmpty) {
+    var lat = 0.0;
+    var lng = 0.0;
+    for (final c in withCoords) {
+      lat += c.latitude!;
+      lng += c.longitude!;
+    }
+    lat /= withCoords.length;
+    lng /= withCoords.length;
+    return GeoPoint(lat, lng);
+  }
+  return const GeoPoint(kFallbackMapLat, kFallbackMapLng);
 }

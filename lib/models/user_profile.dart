@@ -6,6 +6,10 @@ class UserProfile {
   final List<String> ownerGalleryImagePaths;
   final List<String> ownerGalleryVideoPaths;
   final String? neighborhood;
+  /// Lowercase trimmed [neighborhood]; used for area-scoped newsletter (Firestore rules).
+  final String neighborhoodKey;
+  /// Set to true in Firestore for moderator accounts (report queue).
+  final bool isModerator;
   final double? latitude;
   final double? longitude;
   final List<String> petIds;
@@ -21,7 +25,7 @@ class UserProfile {
   final DateTime createdAt;
   final String? bio;
 
-  const UserProfile({
+  UserProfile({
     required this.id,
     required this.email,
     required this.displayName,
@@ -29,6 +33,8 @@ class UserProfile {
     this.ownerGalleryImagePaths = const [],
     this.ownerGalleryVideoPaths = const [],
     this.neighborhood,
+    String? neighborhoodKey,
+    this.isModerator = false,
     this.latitude,
     this.longitude,
     this.petIds = const [],
@@ -42,7 +48,16 @@ class UserProfile {
     this.hostPassExpiry,
     required this.createdAt,
     this.bio,
-  });
+  }) : neighborhoodKey = _effectiveNeighborhoodKey(neighborhoodKey, neighborhood);
+
+  static String normalizeAreaKey(String? neighborhood) =>
+      (neighborhood ?? '').trim().toLowerCase();
+
+  static String _effectiveNeighborhoodKey(String? key, String? neighborhood) {
+    final k = (key ?? '').trim().toLowerCase();
+    if (k.isNotEmpty) return k;
+    return normalizeAreaKey(neighborhood);
+  }
 
   bool get canHostFree => hostCount < 3;
   bool get canHost => canHostFree || isHostPassActive;
@@ -56,6 +71,8 @@ class UserProfile {
       'ownerGalleryImagePaths': ownerGalleryImagePaths,
       'ownerGalleryVideoPaths': ownerGalleryVideoPaths,
       'neighborhood': neighborhood,
+      'neighborhoodKey': neighborhoodKey,
+      'isModerator': isModerator,
       'latitude': latitude,
       'longitude': longitude,
       'petIds': petIds,
@@ -83,6 +100,11 @@ class UserProfile {
       ownerGalleryVideoPaths:
           List<String>.from(map['ownerGalleryVideoPaths'] ?? []),
       neighborhood: map['neighborhood'] as String?,
+      neighborhoodKey: _effectiveNeighborhoodKey(
+        map['neighborhoodKey'] as String?,
+        map['neighborhood'] as String?,
+      ),
+      isModerator: map['isModerator'] as bool? ?? false,
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
       petIds: List<String>.from(map['petIds'] ?? []),
@@ -115,6 +137,8 @@ class UserProfile {
       ownerGalleryImagePaths: ownerGalleryImagePaths,
       ownerGalleryVideoPaths: ownerGalleryVideoPaths,
       neighborhood: neighborhood ?? this.neighborhood,
+      neighborhoodKey: UserProfile.normalizeAreaKey(neighborhood ?? this.neighborhood),
+      isModerator: isModerator,
       latitude: latitude,
       longitude: longitude,
       petIds: petIds,
@@ -140,6 +164,8 @@ class UserProfile {
       ownerGalleryImagePaths: ownerGalleryImagePaths,
       ownerGalleryVideoPaths: ownerGalleryVideoPaths,
       neighborhood: neighborhood,
+      neighborhoodKey: neighborhoodKey,
+      isModerator: isModerator,
       latitude: latitude,
       longitude: longitude,
       petIds: petIds,
@@ -167,6 +193,7 @@ class UserProfile {
     /// When true, [bio] replaces the current value (use `null` or empty to clear).
     bool updateBio = false,
   }) {
+    final nextHood = neighborhood ?? this.neighborhood;
     return UserProfile(
       id: id,
       email: email ?? this.email,
@@ -176,7 +203,9 @@ class UserProfile {
           ownerGalleryImagePaths ?? this.ownerGalleryImagePaths,
       ownerGalleryVideoPaths:
           ownerGalleryVideoPaths ?? this.ownerGalleryVideoPaths,
-      neighborhood: neighborhood ?? this.neighborhood,
+      neighborhood: nextHood,
+      neighborhoodKey: UserProfile.normalizeAreaKey(nextHood),
+      isModerator: isModerator,
       latitude: latitude,
       longitude: longitude,
       petIds: petIds,
@@ -202,6 +231,7 @@ class UserProfile {
       email: '',
       displayName: 'Pet parent',
       neighborhood: 'Nearby',
+      neighborhoodKey: UserProfile.normalizeAreaKey('Nearby'),
       petIds: const [],
       friendUids: const [],
       childAges: const [],

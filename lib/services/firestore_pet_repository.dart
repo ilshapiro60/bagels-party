@@ -20,6 +20,13 @@ class FirestorePetRepository {
         u.startsWith('gs://');
   }
 
+  /// Matches what is stored in Firestore and shown to other users (Discover).
+  static Pet petWithShareableMediaOnly(Pet p) {
+    final m = Map<String, dynamic>.from(p.toMap());
+    _sanitizeMediaFieldsInMap(m);
+    return Pet.fromMap(m);
+  }
+
   static void _sanitizeMediaFieldsInMap(Map<String, dynamic> m) {
     if (!isShareableMediaUrl(m['photoUrl'] as String?)) {
       m['photoUrl'] = null;

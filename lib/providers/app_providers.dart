@@ -11,21 +11,28 @@ import '../config/firebase_bootstrap.dart';
 import '../config/google_sign_in_init.dart';
 import '../firebase_options.dart';
 import '../models/meetup.dart';
+import '../models/party_invite.dart';
 import '../models/pet_buddy_owner_mute.dart';
 import '../models/pet_buddy_request.dart';
 import '../models/party_story.dart';
 import '../models/passport_entry.dart';
+import '../models/community_vet_clinic.dart';
+import '../models/neighborhood_news.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
+import '../services/approximate_location.dart';
 import '../services/auth_persistence.dart';
 import '../services/device_location_service.dart';
 import '../services/firebase_user_mapper.dart';
 import '../services/firestore_meetup_repository.dart';
+import '../services/firestore_passport_repository.dart';
 import '../services/firestore_pet_buddy_repository.dart';
+import '../services/firestore_neighborhood_news_repository.dart';
 import '../services/firestore_pet_repository.dart';
 import '../services/firestore_profile_repository.dart';
 import '../services/firestore_retry.dart';
 import '../services/profile_persistence.dart';
+import '../services/push_notification_service.dart';
 
 final authStateProvider = NotifierProvider<AuthStateNotifier, AuthState>(
   AuthStateNotifier.new,
@@ -224,6 +231,7 @@ class AuthStateNotifier extends Notifier<AuthState> {
     );
     authRouterRefresh.notifyAuthChanged();
     Future.microtask(() => syncDeviceLocation());
+    unawaited(PushNotificationService.initialize(profile.id));
   }
 
   Future<void> signIn(String email, String password) async {
@@ -372,6 +380,7 @@ class AuthStateNotifier extends Notifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    await PushNotificationService.clearTokenAndDispose();
     if (isFirebaseInitialized) {
       final u = FirebaseAuth.instance.currentUser;
       if (u != null && _signedInWithGoogle(u)) {
@@ -431,12 +440,14 @@ extension UserProfileCopyWith on UserProfile {
     List<String>? ownerGalleryImagePaths,
     List<String>? ownerGalleryVideoPaths,
     String? neighborhood,
+    bool? isModerator,
     double? latitude,
     double? longitude,
     List<String>? petIds,
     List<String>? friendUids,
     String? bio,
   }) {
+    final nextHood = neighborhood ?? this.neighborhood;
     return UserProfile(
       id: id,
       email: email ?? this.email,
@@ -446,7 +457,9 @@ extension UserProfileCopyWith on UserProfile {
           ownerGalleryImagePaths ?? this.ownerGalleryImagePaths,
       ownerGalleryVideoPaths:
           ownerGalleryVideoPaths ?? this.ownerGalleryVideoPaths,
-      neighborhood: neighborhood ?? this.neighborhood,
+      neighborhood: nextHood,
+      neighborhoodKey: UserProfile.normalizeAreaKey(nextHood),
+      isModerator: isModerator ?? this.isModerator,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       petIds: petIds ?? this.petIds,
@@ -490,7 +503,8 @@ class PetsNotifier extends Notifier<List<Pet>> {
     final owner = ref.read(authStateProvider).user;
     final anchored = FirestorePetRepository.withOwnerAnchor(pet, owner);
     await FirestorePetRepository.upsert(uid, anchored);
-    state = [...state, anchored];
+    final synced = FirestorePetRepository.petWithShareableMediaOnly(anchored);
+    state = [...state, synced];
   }
 
   Future<void> removePet(String petId) async {
@@ -506,7 +520,8 @@ class PetsNotifier extends Notifier<List<Pet>> {
     final owner = ref.read(authStateProvider).user;
     final anchored = FirestorePetRepository.withOwnerAnchor(pet, owner);
     await FirestorePetRepository.upsert(uid, anchored);
-    state = state.map((p) => p.id == pet.id ? anchored : p).toList();
+    final synced = FirestorePetRepository.petWithShareableMediaOnly(anchored);
+    state = state.map((p) => p.id == pet.id ? synced : p).toList();
   }
 }
 
@@ -551,12 +566,99 @@ final nearbyPetsProvider = Provider<List<Pet>>((ref) {
   return async.value ?? [];
 });
 
+/// Deduped vet clinics from your pets plus neighbors' pets; sorted by link count, then distance.
+final communityVetClinicsProvider = Provider<List<CommunityVetClinic>>((ref) {
+  final mine = ref.watch(userPetsProvider);
+  final neighbors = ref.watch(nearbyPetsProvider);
+  final pets = [...mine, ...neighbors];
+  final user = ref.watch(authStateProvider).user;
+  final list = CommunityVetClinic.aggregateFromPets(pets);
+
+  double? distanceMeters(CommunityVetClinic c) {
+    final ulat = user?.latitude;
+    final ulng = user?.longitude;
+    if (ulat == null || ulng == null) return null;
+    final plat = c.latitude;
+    final plng = c.longitude;
+    if (plat == null || plng == null) return null;
+    return haversineMeters(
+      GeoPoint(ulat, ulng),
+      GeoPoint(plat, plng),
+    );
+  }
+
+  list.sort((a, b) {
+    final byCount = b.linkCount.compareTo(a.linkCount);
+    if (byCount != 0) return byCount;
+    final da = distanceMeters(a);
+    final db = distanceMeters(b);
+    if (da == null && db == null) {
+      return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    }
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return da.compareTo(db);
+  });
+  return list;
+});
+
+/// Area newsletter posts (last 14 days) for the signed-in user's [UserProfile.neighborhoodKey].
+final neighborhoodNewsPostsProvider =
+    StreamProvider<List<NeighborhoodNewsPost>>((ref) {
+  final user = ref.watch(authStateProvider).user;
+  if (user == null || !isFirebaseInitialized) {
+    return Stream.value([]);
+  }
+  return FirestoreNeighborhoodNewsRepository.watchPostsForArea(
+    areaKey: user.neighborhoodKey,
+  );
+});
+
+/// Moderator-only: pending content reports (empty stream if not moderator).
+final neighborhoodNewsPendingReportsProvider =
+    StreamProvider<List<NeighborhoodNewsReport>>((ref) {
+  final user = ref.watch(authStateProvider).user;
+  if (user == null ||
+      !user.isModerator ||
+      !isFirebaseInitialized) {
+    return Stream.value([]);
+  }
+  return FirestoreNeighborhoodNewsRepository.watchPendingReports();
+});
+
+final neighborhoodNewsCommentsProvider = StreamProvider.family<
+    List<NeighborhoodNewsComment>,
+    String>((ref, postId) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreNeighborhoodNewsRepository.watchComments(postId);
+});
+
 final upcomingMeetupsProvider = StreamProvider<List<Meetup>>((ref) {
   final uid = ref.watch(authStateProvider).user?.id;
   if (!isFirebaseInitialized || uid == null) {
     return Stream.value([]);
   }
   return FirestoreMeetupRepository.watchHostedBy(uid);
+});
+
+final incomingPartyInvitesProvider =
+    StreamProvider<List<PartyInvite>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) {
+    return Stream.value([]);
+  }
+  return FirestoreMeetupRepository.watchIncomingInvites(uid);
+});
+
+/// Party invites for a meetup (host-only query shape for Firestore rules).
+final partyInvitesForHostedMeetupProvider = StreamProvider.family<
+    List<PartyInvite>,
+    ({String meetupId, String hostId})>((ref, args) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreMeetupRepository.watchInvitesForMeetupAsHost(
+    meetupId: args.meetupId,
+    hostId: args.hostId,
+  );
 });
 
 /// Other pets linked to [petId] via `petBuddies` (for profile + Discover).
@@ -616,23 +718,22 @@ final ownerProfileProvider =
   return p ?? UserProfile.placeholderNeighbor(ownerId);
 });
 
-final passportEntriesProvider =
-    NotifierProvider<PassportNotifier, List<PassportEntry>>(
-  PassportNotifier.new,
-);
-
-class PassportNotifier extends Notifier<List<PassportEntry>> {
-  @override
-  List<PassportEntry> build() => [];
-
-  void addEntry(PassportEntry entry) {
-    state = [entry, ...state];
+/// Current user’s passport journal (Firestore).
+final passportMyEntriesProvider = StreamProvider<List<PassportEntry>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) {
+    return Stream.value([]);
   }
+  return FirestorePassportRepository.watchMyEntries(uid);
+});
 
-  void removeEntriesForMeetup(String meetupId) {
-    state = state.where((e) => e.meetupId != meetupId).toList();
+/// Public entries from all users (searchable in the Community tab).
+final passportPublicEntriesProvider = StreamProvider<List<PassportEntry>>((ref) {
+  if (!isFirebaseInitialized) {
+    return Stream.value([]);
   }
-}
+  return FirestorePassportRepository.watchPublicEntries();
+});
 
 final selectedTabProvider = NotifierProvider<SelectedTabNotifier, int>(
   SelectedTabNotifier.new,

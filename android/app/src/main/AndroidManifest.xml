@@ -6,11 +6,17 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true">
+        <provider
+            android:name=".AppCheckEarlyInitProvider"
+            android:authorities="${applicationId}.appcheck-early-init"
+            android:exported="false"
+            android:initOrder="101" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

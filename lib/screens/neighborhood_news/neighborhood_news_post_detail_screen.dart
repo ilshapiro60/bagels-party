@@ -1,0 +1,324 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../config/theme.dart';
+import '../../models/neighborhood_news.dart';
+import '../../providers/app_providers.dart';
+import '../../services/firestore_neighborhood_news_repository.dart';
+
+String? _snippetForReport(NeighborhoodNewsPost post) {
+  final t = post.title?.trim();
+  if (t != null && t.isNotEmpty) {
+    return t.length > 120 ? t.substring(0, 120) : t;
+  }
+  final b = post.body;
+  if (b.isEmpty) return null;
+  return b.length <= 80 ? b : b.substring(0, 80);
+}
+
+class NeighborhoodNewsPostDetailScreen extends ConsumerStatefulWidget {
+  const NeighborhoodNewsPostDetailScreen({
+    super.key,
+    required this.postId,
+    this.initialPost,
+  });
+
+  final String postId;
+  final NeighborhoodNewsPost? initialPost;
+
+  @override
+  ConsumerState<NeighborhoodNewsPostDetailScreen> createState() =>
+      _NeighborhoodNewsPostDetailScreenState();
+}
+
+class _NeighborhoodNewsPostDetailScreenState
+    extends ConsumerState<NeighborhoodNewsPostDetailScreen> {
+  final _comment = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  NeighborhoodNewsPost? _resolvePost(List<NeighborhoodNewsPost> list) {
+    for (final p in list) {
+      if (p.id == widget.postId) return p;
+    }
+    return widget.initialPost;
+  }
+
+  Future<void> _sendComment(NeighborhoodNewsPost post) async {
+    final user = ref.read(authStateProvider).user;
+    if (user == null) return;
+    final t = _comment.text.trim();
+    if (t.isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      await FirestoreNeighborhoodNewsRepository.addComment(
+        postId: post.id,
+        author: user,
+        body: t,
+      );
+      _comment.clear();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _confirmDeletePost(NeighborhoodNewsPost post) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete post?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await FirestoreNeighborhoodNewsRepository.deletePost(post.id);
+      if (mounted) context.pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+
+  Future<void> _report(NeighborhoodNewsPost post) async {
+    final user = ref.read(authStateProvider).user;
+    if (user == null) return;
+    final reason = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Report post'),
+        content: TextField(
+          controller: reason,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'What is wrong with this post?',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit')),
+        ],
+      ),
+    );
+    if (submitted != true || !mounted) return;
+    try {
+      await FirestoreNeighborhoodNewsRepository.submitReport(
+        reporter: user,
+        postId: post.id,
+        areaKey: post.areaKey,
+        reason: reason.text,
+        postTitleSnippet: _snippetForReport(post),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Thanks — moderators will review.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).user;
+    final postsAsync = ref.watch(neighborhoodNewsPostsProvider);
+    final commentsAsync = ref.watch(neighborhoodNewsCommentsProvider(widget.postId));
+    final df = DateFormat.yMMMd().add_jm();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Post'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          onPressed: () => context.pop(),
+        ),
+        actions: [
+          postsAsync.maybeWhen(
+            data: (list) {
+              final post = _resolvePost(list);
+              if (post == null) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'report') _report(post);
+                  if (v == 'delete') _confirmDeletePost(post);
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(value: 'report', child: Text('Report')),
+                  if (user?.id == post.authorId)
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
+      body: postsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error: $e')),
+        data: (list) {
+          final post = _resolvePost(list);
+          if (post == null) {
+            return const Center(child: Text('Post not found or older than 2 weeks.'));
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    if (post.title != null && post.title!.trim().isNotEmpty)
+                      Text(
+                        post.title!,
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    if (post.title != null && post.title!.trim().isNotEmpty)
+                      const SizedBox(height: 12),
+                    Text(post.body, style: Theme.of(context).textTheme.bodyLarge),
+                    const SizedBox(height: 16),
+                    Text(
+                      '${post.authorDisplayName} · ${df.format(post.createdAt)}',
+                      style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+                    ),
+                    const SizedBox(height: 28),
+                    Text('Comments', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    commentsAsync.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      error: (e, _) => Text('Comments: $e'),
+                      data: (comments) {
+                        if (comments.isEmpty) {
+                          return Text(
+                            'No comments yet.',
+                            style: TextStyle(color: PawPartyColors.textHint),
+                          );
+                        }
+                        return Column(
+                          children: comments.map((c) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: PawPartyColors.surfaceVariant.withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            c.authorDisplayName,
+                                            style: const TextStyle(fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                        if (user?.id == c.authorId || user?.isModerator == true)
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline, size: 20),
+                                            onPressed: () async {
+                                              await FirestoreNeighborhoodNewsRepository
+                                                  .deleteComment(
+                                                postId: post.id,
+                                                commentId: c.id,
+                                              );
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(c.body),
+                                    Text(
+                                      df.format(c.createdAt),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: PawPartyColors.textHint,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _comment,
+                          decoration: const InputDecoration(
+                            hintText: 'Add a comment…',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _sending ? null : () => _sendComment(post),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: _sending
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.send, size: 22),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}

@@ -4,9 +4,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
+import '../../config/firebase_bootstrap.dart';
 import '../../models/passport_entry.dart';
 import '../../models/pet.dart';
 import '../../providers/app_providers.dart';
+import '../../services/firestore_passport_repository.dart';
 import '../../widgets/passport_entry_card.dart';
 
 class PassportScreen extends ConsumerStatefulWidget {
@@ -19,23 +21,100 @@ class PassportScreen extends ConsumerStatefulWidget {
 class _PassportScreenState extends ConsumerState<PassportScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  int _selectedPetIndex = 0;
+  final _journalSearch = TextEditingController();
+  final _communitySearch = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _journalSearch.dispose();
+    _communitySearch.dispose();
     super.dispose();
+  }
+
+  Pet? _currentPet(List<Pet> pets) {
+    if (pets.isEmpty) return null;
+    final i = _selectedPetIndex.clamp(0, pets.length - 1);
+    return pets[i];
+  }
+
+  List<PassportEntry> _filterEntries(
+    List<PassportEntry> entries,
+    String query,
+  ) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return entries;
+    return entries.where((e) {
+      if (e.searchText.isNotEmpty && e.searchText.contains(q)) return true;
+      return e.meetupTitle.toLowerCase().contains(q) ||
+          e.hostName.toLowerCase().contains(q) ||
+          e.petName.toLowerCase().contains(q) ||
+          e.behaviorNotes?.toLowerCase().contains(q) == true ||
+          e.metPetNames.any((n) => n.toLowerCase().contains(q));
+    }).toList();
+  }
+
+  Future<void> _confirmDeleteEntry(PassportEntry entry) async {
+    final user = ref.read(authStateProvider).user;
+    if (user == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this entry?'),
+        content: Text(
+          '“${entry.meetupTitle}” will be removed from your passport.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: PawPartyColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    try {
+      await FirestorePassportRepository.deleteEntry(
+        entryId: entry.id,
+        actingOwnerId: user.id,
+      );
+      ref.invalidate(passportMyEntriesProvider);
+      ref.invalidate(passportPublicEntriesProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Entry deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete: $e')),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final pets = ref.watch(userPetsProvider);
-    final entries = ref.watch(passportEntriesProvider);
+    final myAsync = ref.watch(passportMyEntriesProvider);
+    final publicAsync = ref.watch(passportPublicEntriesProvider);
+    final pet = _currentPet(pets);
 
     return Scaffold(
       appBar: AppBar(
@@ -48,10 +127,22 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
           ),
         ],
       ),
+      floatingActionButton: _tabController.index == 2
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: !isFirebaseInitialized
+                  ? null
+                  : () => context.push(
+                        '/add-passport-entry',
+                        extra: pet?.id,
+                      ),
+              icon: const Icon(Icons.add),
+              label: const Text('Add entry'),
+            ),
       body: Column(
         children: [
           if (pets.length > 1) _buildPetSelector(pets),
-          _buildStatsBar(pets.isNotEmpty ? pets.first : null, entries),
+          _buildStatsBar(pet, myAsync.value ?? []),
           TabBar(
             controller: _tabController,
             labelColor: PawPartyColors.primary,
@@ -59,6 +150,7 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
             indicatorColor: PawPartyColors.primary,
             tabs: const [
               Tab(text: 'Journal'),
+              Tab(text: 'Community'),
               Tab(text: 'Stats'),
             ],
           ),
@@ -66,8 +158,9 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildJournalTab(entries, pets.isNotEmpty ? pets.first : null),
-                _buildStatsTab(entries, pets.isNotEmpty ? pets.first : null),
+                _buildJournalTab(myAsync, pet),
+                _buildCommunityTab(publicAsync),
+                _buildStatsTab(myAsync.value ?? [], pet),
               ],
             ),
           ),
@@ -85,11 +178,11 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
         itemCount: pets.length,
         itemBuilder: (context, index) {
           final pet = pets[index];
-          final isSelected = index == 0;
+          final isSelected = index == _selectedPetIndex;
           return Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
-              onTap: () {},
+              onTap: () => setState(() => _selectedPetIndex = index),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
@@ -130,7 +223,7 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
                           ),
                         ),
                         Text(
-                          '${pet.meetupCount} entries',
+                          '${pet.meetupCount} meetups',
                           style: TextStyle(
                             fontSize: 12,
                             color: PawPartyColors.textSecondary,
@@ -165,7 +258,7 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _statItem('Meetups', '${petEntries.length}', Icons.celebration),
+          _statItem('Entries', '${petEntries.length}', Icons.auto_stories),
           _statItem(
             'Friends',
             '${petEntries.expand((e) => e.metPetNames).toSet().length}',
@@ -177,9 +270,9 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
             Icons.star,
           ),
           _statItem(
-            'Streak',
-            '3 wks',
-            Icons.local_fire_department,
+            'Public',
+            '${petEntries.where((e) => e.isPublic).length}',
+            Icons.public,
           ),
         ],
       ),
@@ -210,44 +303,148 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
     );
   }
 
-  Widget _buildJournalTab(List<PassportEntry> entries, Pet? pet) {
-    final petEntries = pet != null
-        ? entries.where((e) => e.petId == pet.id).toList()
-        : entries;
-
-    if (petEntries.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.auto_stories, size: 64, color: PawPartyColors.textHint),
-            const SizedBox(height: 16),
-            Text(
-              'No entries yet',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: PawPartyColors.textHint,
-                  ),
+  Widget _buildJournalTab(AsyncValue<List<PassportEntry>> myAsync, Pet? pet) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: TextField(
+            controller: _journalSearch,
+            decoration: InputDecoration(
+              hintText: 'Search your journal…',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              isDense: true,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Attend a party to start building\nyour pet\'s social passport!',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: PawPartyColors.textSecondary),
-            ),
-          ],
+            onChanged: (_) => setState(() {}),
+          ),
         ),
-      );
-    }
+        Expanded(
+          child: myAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Could not load: $e')),
+            data: (entries) {
+              final forPet = pet != null
+                  ? entries.where((e) => e.petId == pet.id).toList()
+                  : entries;
+              final filtered = _filterEntries(forPet, _journalSearch.text);
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.auto_stories, size: 64, color: PawPartyColors.textHint),
+                      const SizedBox(height: 16),
+                      Text(
+                        entries.isEmpty ? 'No entries yet' : 'No matches',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              color: PawPartyColors.textHint,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        entries.isEmpty
+                            ? 'Tap Add entry to log a party.'
+                            : 'Try a different search.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: PawPartyColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final entry = filtered[index];
+                  return PassportEntryCard(
+                    entry: entry,
+                    onDelete: () => _confirmDeleteEntry(entry),
+                  )
+                      .animate()
+                      .fadeIn(delay: (50 * index).ms, duration: 400.ms)
+                      .slideX(begin: 0.05);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: petEntries.length,
-      itemBuilder: (context, index) {
-        return PassportEntryCard(entry: petEntries[index])
-            .animate()
-            .fadeIn(delay: (100 * index).ms, duration: 400.ms)
-            .slideX(begin: 0.05);
-      },
+  Widget _buildCommunityTab(AsyncValue<List<PassportEntry>> publicAsync) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: TextField(
+            controller: _communitySearch,
+            decoration: InputDecoration(
+              hintText: 'Search community posts…',
+              prefixIcon: const Icon(Icons.travel_explore),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              isDense: true,
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        Expanded(
+          child: publicAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('Could not load: $e')),
+            data: (entries) {
+              final filtered = _filterEntries(entries, _communitySearch.text);
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.public, size: 56, color: PawPartyColors.textHint),
+                        const SizedBox(height: 16),
+                        Text(
+                          entries.isEmpty
+                              ? 'No public posts yet'
+                              : 'No matches',
+                          style: Theme.of(context).textTheme.titleLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          entries.isEmpty
+                              ? 'When you add an entry, turn on “Share on Community” to show it here.'
+                              : 'Try another search term.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: PawPartyColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  return PassportEntryCard(
+                    entry: filtered[index],
+                    showPetAttribution: true,
+                  )
+                      .animate()
+                      .fadeIn(delay: (40 * index).ms, duration: 350.ms);
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -270,54 +467,60 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
         children: [
           Text('Frequent Friends', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
-          ...sortedFriends.map((friend) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: PawPartyColors.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: PawPartyColors.divider.withValues(alpha: 0.5)),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: PawPartyColors.secondary.withValues(alpha: 0.15),
-                    child: Text(
-                      friend.key[0],
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: PawPartyColors.secondary,
+          if (sortedFriends.isEmpty)
+            Text(
+              'Log meetups in your journal to see stats.',
+              style: TextStyle(color: PawPartyColors.textSecondary),
+            )
+          else
+            ...sortedFriends.map((friend) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: PawPartyColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: PawPartyColors.divider.withValues(alpha: 0.5)),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: PawPartyColors.secondary.withValues(alpha: 0.15),
+                      child: Text(
+                        friend.key[0],
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: PawPartyColors.secondary,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      friend.key,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: PawPartyColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${friend.value}x',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: PawPartyColors.primary,
-                        fontSize: 13,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        friend.key,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: PawPartyColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${friend.value}x',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: PawPartyColors.primary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
           const SizedBox(height: 24),
           Text('Play Outcomes', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),

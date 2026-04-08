@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,15 @@ import '../../services/firestore_pet_buddy_repository.dart';
 import '../../services/firestore_pet_repository.dart';
 import '../../services/firestore_profile_repository.dart';
 import '../../services/profile_persistence.dart';
+
+String _firebaseErrorSnackText(Object e) {
+  if (e is FirebaseException) {
+    final msg = e.message?.trim();
+    if (msg != null && msg.isNotEmpty) return '${e.code}: $msg';
+    return e.code;
+  }
+  return e.toString();
+}
 
 String _petBuddyLoadErrorMessage(Object e) {
   final s = e.toString();
@@ -115,10 +125,21 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
           ),
         ),
       );
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Accept failed (${_firebaseErrorSnackText(e)})'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Accept failed: $e')),
+        SnackBar(
+          content: Text('Accept failed: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }

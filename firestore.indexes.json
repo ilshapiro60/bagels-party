@@ -1,6 +1,38 @@
 {
   "indexes": [
     {
+      "collectionGroup": "passportEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passportEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "meetupId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "passportEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPublic", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "partyInvites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "meetupId", "order": "ASCENDING" },
+        { "fieldPath": "hostId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "petBuddyRequests",
       "queryScope": "COLLECTION",
       "fields": [
@@ -23,6 +55,23 @@
         { "fieldPath": "fromOwnerId", "order": "ASCENDING" },
         { "fieldPath": "toOwnerId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "neighborhoodNewsPosts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "areaKey", "order": "ASCENDING" },
+        { "fieldPath": "hidden", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "neighborhoodNewsReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
     }
   ],

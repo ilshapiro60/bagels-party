@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:*", "http://127.0.0.1:*"],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Authorization", "Content-Length", "x-goog-resumable", "x-firebase-storage-*"]
+  }
+]

@@ -28,6 +28,13 @@ class Pet {
   /// Owner's last known coords when the pet was saved (for Discover map fuzzing).
   final double? ownerApproxLat;
   final double? ownerApproxLng;
+  /// Optional linked veterinary clinic (visible to other users like the rest of the pet profile).
+  final String? vetClinicName;
+  final String? vetClinicAddress;
+  final double? vetClinicLatitude;
+  final double? vetClinicLongitude;
+  /// Reserved for future Google Places deduplication; optional.
+  final String? vetGooglePlaceId;
 
   const Pet({
     required this.id,
@@ -56,7 +63,15 @@ class Pet {
     this.averageRating = 0.0,
     this.ownerApproxLat,
     this.ownerApproxLng,
+    this.vetClinicName,
+    this.vetClinicAddress,
+    this.vetClinicLatitude,
+    this.vetClinicLongitude,
+    this.vetGooglePlaceId,
   });
+
+  bool get hasVetClinicLink =>
+      vetClinicName != null && vetClinicName!.trim().isNotEmpty;
 
   String get ageDisplay {
     if (ageYears == null && ageMonths == null) return 'Unknown';
@@ -108,6 +123,13 @@ class Pet {
       'createdAt': createdAt.toIso8601String(),
       'meetupCount': meetupCount,
       'averageRating': averageRating,
+      'ownerApproxLat': ownerApproxLat,
+      'ownerApproxLng': ownerApproxLng,
+      'vetClinicName': vetClinicName,
+      'vetClinicAddress': vetClinicAddress,
+      'vetClinicLatitude': vetClinicLatitude,
+      'vetClinicLongitude': vetClinicLongitude,
+      'vetGooglePlaceId': vetGooglePlaceId,
     };
   }
 
@@ -139,6 +161,11 @@ class Pet {
       averageRating: (map['averageRating'] as num?)?.toDouble() ?? 0.0,
       ownerApproxLat: (map['ownerApproxLat'] as num?)?.toDouble(),
       ownerApproxLng: (map['ownerApproxLng'] as num?)?.toDouble(),
+      vetClinicName: map['vetClinicName'] as String?,
+      vetClinicAddress: map['vetClinicAddress'] as String?,
+      vetClinicLatitude: (map['vetClinicLatitude'] as num?)?.toDouble(),
+      vetClinicLongitude: (map['vetClinicLongitude'] as num?)?.toDouble(),
+      vetGooglePlaceId: map['vetGooglePlaceId'] as String?,
     );
   }
 
@@ -166,7 +193,48 @@ class Pet {
     double? averageRating,
     double? ownerApproxLat,
     double? ownerApproxLng,
+    String? vetClinicName,
+    String? vetClinicAddress,
+    double? vetClinicLatitude,
+    double? vetClinicLongitude,
+    String? vetGooglePlaceId,
+    bool clearVetClinicLink = false,
   }) {
+    if (clearVetClinicLink) {
+      return Pet(
+        id: id,
+        ownerId: ownerId,
+        name: name ?? this.name,
+        type: type ?? this.type,
+        breed: breed ?? this.breed,
+        gender: gender ?? this.gender,
+        size: size ?? this.size,
+        ageYears: ageYears ?? this.ageYears,
+        ageMonths: ageMonths ?? this.ageMonths,
+        photoUrl: photoUrl ?? this.photoUrl,
+        photoGallery: photoGallery ?? this.photoGallery,
+        videoPaths: videoPaths ?? this.videoPaths,
+        energyLevel: energyLevel ?? this.energyLevel,
+        socialComfort: socialComfort ?? this.socialComfort,
+        kidTolerance: kidTolerance ?? this.kidTolerance,
+        sizeTolerance: sizeTolerance ?? this.sizeTolerance,
+        playStyles: playStyles ?? this.playStyles,
+        triggers: triggers ?? this.triggers,
+        bio: bio ?? this.bio,
+        isSpayedNeutered: isSpayedNeutered ?? this.isSpayedNeutered,
+        isVaccinated: isVaccinated ?? this.isVaccinated,
+        createdAt: createdAt,
+        meetupCount: meetupCount ?? this.meetupCount,
+        averageRating: averageRating ?? this.averageRating,
+        ownerApproxLat: ownerApproxLat ?? this.ownerApproxLat,
+        ownerApproxLng: ownerApproxLng ?? this.ownerApproxLng,
+        vetClinicName: null,
+        vetClinicAddress: null,
+        vetClinicLatitude: null,
+        vetClinicLongitude: null,
+        vetGooglePlaceId: null,
+      );
+    }
     return Pet(
       id: id,
       ownerId: ownerId,
@@ -194,6 +262,11 @@ class Pet {
       averageRating: averageRating ?? this.averageRating,
       ownerApproxLat: ownerApproxLat ?? this.ownerApproxLat,
       ownerApproxLng: ownerApproxLng ?? this.ownerApproxLng,
+      vetClinicName: vetClinicName ?? this.vetClinicName,
+      vetClinicAddress: vetClinicAddress ?? this.vetClinicAddress,
+      vetClinicLatitude: vetClinicLatitude ?? this.vetClinicLatitude,
+      vetClinicLongitude: vetClinicLongitude ?? this.vetClinicLongitude,
+      vetGooglePlaceId: vetGooglePlaceId ?? this.vetGooglePlaceId,
     );
   }
 }

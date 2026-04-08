@@ -56,8 +56,12 @@ class FirestorePetBuddyRepository {
 
   static Future<bool> isMutedBetween(String uidA, String uidB) async {
     if (uidA == uidB) return false;
-    final snap = await _ownerMutes.doc(ownerMuteDocId(uidA, uidB)).get();
-    return snap.exists;
+    try {
+      final snap = await _ownerMutes.doc(ownerMuteDocId(uidA, uidB)).get();
+      return snap.exists;
+    } on FirebaseException {
+      return false;
+    }
   }
 
   static Stream<List<PetBuddyOwnerMute>> watchMutesInvolving(String uid) async* {

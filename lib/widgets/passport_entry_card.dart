@@ -8,8 +8,15 @@ import 'paw_video_thumb.dart';
 
 class PassportEntryCard extends StatelessWidget {
   final PassportEntry entry;
-
-  const PassportEntryCard({super.key, required this.entry});
+  final VoidCallback? onDelete;
+  /// Show pet name chip (e.g. on Community feed).
+  final bool showPetAttribution;
+  const PassportEntryCard({
+    super.key,
+    required this.entry,
+    this.onDelete,
+    this.showPetAttribution = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -88,9 +95,37 @@ class PassportEntryCard extends StatelessWidget {
                   ),
                 ),
                 if (entry.rating != null) _buildRating(entry.rating!),
+                if (onDelete != null)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline, color: PawPartyColors.error),
+                    tooltip: 'Delete entry',
+                    onPressed: onDelete,
+                  ),
               ],
             ),
           ),
+          if (showPetAttribution && entry.petName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: PawPartyColors.secondary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    entry.petName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: PawPartyColors.secondary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           // Body
           Padding(
             padding: const EdgeInsets.all(16),

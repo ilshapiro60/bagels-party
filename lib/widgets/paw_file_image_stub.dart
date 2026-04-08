@@ -10,6 +10,19 @@ Widget buildPawFileOrNetworkImage(
   double? height,
 }) {
   final trimmed = path.trim();
+  // Web image_picker often returns blob: or data: URLs; they are not real file paths.
+  if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+    return Image.network(
+      trimmed,
+      fit: fit,
+      width: width,
+      height: height,
+      errorBuilder: (context, error, stackTrace) => ColoredBox(
+        color: Colors.grey.shade300,
+        child: Icon(Icons.image_not_supported, size: (height ?? 48) * 0.4),
+      ),
+    );
+  }
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return Image.network(
       trimmed,

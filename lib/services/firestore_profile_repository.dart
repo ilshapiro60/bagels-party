@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 
 import '../models/user_profile.dart';
 import 'firebase_user_mapper.dart';
+import 'firestore_pet_repository.dart';
 
 class FirestoreProfileRepository {
   FirestoreProfileRepository._();
@@ -35,6 +36,8 @@ class FirestoreProfileRepository {
     if (u.hostPassExpiry != null) {
       m['hostPassExpiry'] = Timestamp.fromDate(u.hostPassExpiry!);
     }
+    m['neighborhoodKey'] = UserProfile.normalizeAreaKey(u.neighborhood);
+    m['isModerator'] = u.isModerator;
     return m;
   }
 
@@ -56,8 +59,47 @@ class FirestoreProfileRepository {
     return initial;
   }
 
+  /// Profile fields visible to other users: only http/https/gs media URLs.
+  /// Local device paths are stripped so neighbors do not get broken images.
+  static UserProfile profileForCloudWrite(UserProfile u) {
+    final okPhoto = FirestorePetRepository.isShareableMediaUrl(u.photoUrl);
+    return UserProfile(
+      id: u.id,
+      email: u.email,
+      displayName: u.displayName,
+      photoUrl: okPhoto ? u.photoUrl : null,
+      ownerGalleryImagePaths: u.ownerGalleryImagePaths
+          .where(FirestorePetRepository.isShareableMediaUrl)
+          .toList(),
+      ownerGalleryVideoPaths: u.ownerGalleryVideoPaths
+          .where(FirestorePetRepository.isShareableMediaUrl)
+          .toList(),
+      neighborhood: u.neighborhood,
+      neighborhoodKey: u.neighborhoodKey,
+      isModerator: u.isModerator,
+      latitude: u.latitude,
+      longitude: u.longitude,
+      petIds: u.petIds,
+      friendUids: u.friendUids,
+      childAges: u.childAges,
+      hostCount: u.hostCount,
+      attendCount: u.attendCount,
+      hostRating: u.hostRating,
+      guestRating: u.guestRating,
+      isHostPassActive: u.isHostPassActive,
+      hostPassExpiry: u.hostPassExpiry,
+      createdAt: u.createdAt,
+      bio: u.bio,
+    );
+  }
+
   static Future<void> saveProfile(UserProfile u) async {
-    await _profiles.doc(u.id).set(profileToFirestore(u), SetOptions(merge: true));
+    final forCloud = profileForCloudWrite(u);
+    final m = profileToFirestore(forCloud);
+    if (!FirestorePetRepository.isShareableMediaUrl(u.photoUrl)) {
+      m['photoUrl'] = FieldValue.delete();
+    }
+    await _profiles.doc(u.id).set(m, SetOptions(merge: true));
   }
 
   static Future<void> incrementHostCount(String uid) async {
@@ -86,6 +128,7 @@ class FirestoreProfileRepository {
     };
     if (neighborhood != null) {
       data['neighborhood'] = neighborhood;
+      data['neighborhoodKey'] = UserProfile.normalizeAreaKey(neighborhood);
     }
     await _profiles.doc(uid).set(data, SetOptions(merge: true));
   }

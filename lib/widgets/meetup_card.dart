@@ -8,12 +8,19 @@ class MeetupCard extends StatelessWidget {
   final String? currentUserId;
   /// When set, host sees a delete control to remove the party from Firestore.
   final void Function(Meetup meetup)? onHostDelete;
+  /// Replaces "X/Y families" when using [partyInvites] instead of embedded meetup invites.
+  final String? guestSummaryOverride;
+  final VoidCallback? onHostInviteMore;
+  final VoidCallback? onHostManageGuests;
 
   const MeetupCard({
     super.key,
     required this.meetup,
     this.currentUserId,
     this.onHostDelete,
+    this.guestSummaryOverride,
+    this.onHostInviteMore,
+    this.onHostManageGuests,
   });
 
   @override
@@ -117,26 +124,70 @@ class MeetupCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.people, size: 14, color: PawPartyColors.textSecondary),
               const SizedBox(width: 4),
-              Text(
-                '${meetup.acceptedCount}/${meetup.maxGuests} families',
-                style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+              Expanded(
+                child: Text(
+                  guestSummaryOverride ??
+                      (meetup.maxGuests > 0
+                          ? '${meetup.acceptedCount}/${meetup.maxGuests} families'
+                          : '${meetup.acceptedCount} accepted'),
+                  style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
               Icon(Icons.local_pizza, size: 16, color: PawPartyColors.pizzaGold),
               const SizedBox(width: 2),
-              Text(
-                meetup.pizzaCommitment.pizzaPartner ?? 'Pizza included',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: PawPartyColors.pizzaGold,
+              Flexible(
+                child: Text(
+                  meetup.pizzaCommitment.pizzaPartner ?? 'Pizza included',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: PawPartyColors.pizzaGold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
                 ),
               ),
             ],
           ),
+          if (isHosting &&
+              (onHostInviteMore != null || onHostManageGuests != null)) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                if (onHostInviteMore != null)
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: onHostInviteMore,
+                      icon: const Icon(Icons.person_add_alt_1, size: 18),
+                      label: const Text('Invite'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: PawPartyColors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
+                    ),
+                  ),
+                if (onHostManageGuests != null)
+                  Expanded(
+                    child: TextButton.icon(
+                      onPressed: onHostManageGuests,
+                      icon: const Icon(Icons.groups, size: 18),
+                      label: const Text('Guests'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: PawPartyColors.primary,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );

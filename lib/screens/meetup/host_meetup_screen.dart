@@ -33,7 +33,6 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 3));
   TimeOfDay _selectedTime = const TimeOfDay(hour: 14, minute: 0);
   int _duration = 120;
-  int _maxGuests = 4;
 
   // Step 2: Location & amenities
   final _addressController = TextEditingController();
@@ -104,7 +103,6 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
     if (context.canPop()) {
       context.pop();
     } else {
-      // Opened via context.go('/host') — no stack entry, so pop() is a no-op.
       context.go('/home');
     }
   }
@@ -139,7 +137,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
     if (!isFirebaseInitialized) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Firebase is not configured — cannot save the party yet.'),
+          content: Text('Firebase is not configured - cannot save the party yet.'),
         ),
       );
       return;
@@ -178,7 +176,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
         address: address,
         latitude: lat,
         longitude: lng,
-        maxGuests: _maxGuests,
+        maxGuests: 0,
         invites: const [],
         pizzaCommitment: PizzaCommitment(
           willProvidePizza: _willProvidePizza,
@@ -203,13 +201,13 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('“${meetup.title}” is live! Guests can discover it soon.'),
+          content: const Text('Party created! Now invite your friends.'),
           backgroundColor: PawPartyColors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      context.go('/home');
+      context.go('/invite-friends/${meetup.id}');
     } catch (e) {
       if (!mounted) return;
       final es = e.toString();
@@ -409,21 +407,6 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
                 label: Text('${mins ~/ 60}h${mins % 60 > 0 ? " ${mins % 60}m" : ""}'),
                 selected: isSelected,
                 onSelected: (_) => setState(() => _duration = mins),
-                selectedColor: PawPartyColors.primary.withValues(alpha: 0.15),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-          Text('Max Guests', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [2, 3, 4, 5, 6, 8].map((count) {
-              final isSelected = _maxGuests == count;
-              return ChoiceChip(
-                label: Text('$count families'),
-                selected: isSelected,
-                onSelected: (_) => setState(() => _maxGuests = count),
                 selectedColor: PawPartyColors.primary.withValues(alpha: 0.15),
               );
             }).toList(),
@@ -674,7 +657,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : Text(isLastStep ? 'Create party! 🍕' : 'Continue'),
+                  : Text(isLastStep ? 'Create party!' : 'Continue'),
             ),
           ),
         ],

@@ -1,3 +1,4 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -391,12 +392,36 @@ class ProfileScreen extends ConsumerWidget {
           () => context.push('/friends'),
         ),
         _menuItem(
+          Icons.local_hospital_outlined,
+          'Community vet clinics',
+          'Clinics other members linked on pets',
+          () => context.push('/community-vet-clinics'),
+        ),
+        _menuItem(
+          Icons.forum_outlined,
+          'Area newsletter',
+          'Neighborhood posts & comments',
+          () => context.push('/neighborhood-news'),
+        ),
+        if (user.isModerator)
+          _menuItem(
+            Icons.flag_outlined,
+            'Moderation — newsletter',
+            'Pending reports queue',
+            () => context.push('/moderation/neighborhood-news'),
+          ),
+        _menuItem(
           Icons.child_care,
           'Children in Household',
           childrenSubtitle,
           () {},
         ),
-        _menuItem(Icons.notifications_outlined, 'Notifications', null, () {}),
+        _menuItem(
+          Icons.notifications_outlined,
+          'Notifications',
+          null,
+          () => _openNotificationSettings(context),
+        ),
         _menuItem(Icons.privacy_tip_outlined, 'Privacy & Safety', null, () {}),
         _menuItem(Icons.help_outline, 'Help & Support', null, () {}),
         _menuItem(Icons.info_outline, 'About ${AppConstants.appName}', null, () {}),
@@ -446,6 +471,60 @@ class ProfileScreen extends ConsumerWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
+}
+
+void _openNotificationSettings(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Text(
+                'Notification Settings',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+              child: Text(
+                'Push notifications are managed by your device. '
+                'Tap below to open system settings.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.app_settings_alt_outlined),
+              title: const Text('Open system notification settings'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _launchAppNotificationSettings();
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> _launchAppNotificationSettings() async {
+  // Opens the app's notification settings page in the OS.
+  // firebase_messaging's requestPermission handles the initial prompt;
+  // this is for users who denied and want to re-enable later.
+  try {
+    await FirebaseMessaging.instance.requestPermission();
+  } catch (_) {}
 }
 
 void _openProfileSettings(

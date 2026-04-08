@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -5,10 +6,20 @@ import 'package:image_picker/image_picker.dart';
 import '../config/theme.dart';
 import '../providers/app_providers.dart';
 import '../services/firebase_storage_service.dart';
+import '../services/firestore_pet_repository.dart';
 import '../utils/media_picker_utils.dart';
 import 'fullscreen_video.dart';
 import 'paw_file_image.dart';
 import 'paw_video_thumb.dart';
+
+String _firebaseErrorSnackText(Object e) {
+  if (e is FirebaseException) {
+    final msg = e.message?.trim();
+    if (msg != null && msg.isNotEmpty) return '${e.code}: $msg';
+    return e.code;
+  }
+  return e.toString();
+}
 
 class OwnerMediaStrip extends ConsumerStatefulWidget {
   const OwnerMediaStrip({super.key});
@@ -48,12 +59,49 @@ class _OwnerMediaStripState extends ConsumerState<OwnerMediaStrip> {
         : await pickPhotoFromCamera();
     final user = ref.read(authStateProvider).user;
     if (path != null && user != null) {
-      final url = await FirebaseStorageService.instance.uploadProfileAvatar(path);
-      if (!mounted) return;
-      ref.read(authStateProvider.notifier).updateUser(
-            user.copyWith(photoUrl: url),
+      try {
+        final url = await FirebaseStorageService.instance.uploadProfileAvatar(
+          path,
+          allowLocalFallback: false,
+        );
+        if (!mounted) return;
+        if (!FirestorePetRepository.isShareableMediaUrl(url)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not upload profile photo. Check your connection and try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
           );
-      setState(() {});
+          return;
+        }
+        ref.read(authStateProvider.notifier).updateUser(
+              user.copyWith(photoUrl: url),
+            );
+        setState(() {});
+      } on FirebaseException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not upload profile photo (${_firebaseErrorSnackText(e)}). '
+              'If this is not the network, check Firebase Storage rules and App Check.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not upload profile photo: ${_firebaseErrorSnackText(e)}',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -61,15 +109,50 @@ class _OwnerMediaStripState extends ConsumerState<OwnerMediaStrip> {
     final path = await pickPhotoFromGallery();
     final user = ref.read(authStateProvider).user;
     if (path != null && user != null) {
-      final url =
-          await FirebaseStorageService.instance.uploadProfileGalleryImage(path);
-      if (!mounted) return;
-      ref.read(authStateProvider.notifier).updateUser(
-            user.copyWith(
-              ownerGalleryImagePaths: [...user.ownerGalleryImagePaths, url],
+      try {
+        final url =
+            await FirebaseStorageService.instance.uploadProfileGalleryImage(
+          path,
+          allowLocalFallback: false,
+        );
+        if (!mounted) return;
+        if (!FirestorePetRepository.isShareableMediaUrl(url)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not upload photo. Check your connection and try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
             ),
           );
-      setState(() {});
+          return;
+        }
+        ref.read(authStateProvider.notifier).updateUser(
+              user.copyWith(
+                ownerGalleryImagePaths: [...user.ownerGalleryImagePaths, url],
+              ),
+            );
+        setState(() {});
+      } on FirebaseException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not upload photo (${_firebaseErrorSnackText(e)}). '
+              'If this is not the network, check Firebase Storage rules and App Check.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not upload photo: ${_firebaseErrorSnackText(e)}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -77,15 +160,50 @@ class _OwnerMediaStripState extends ConsumerState<OwnerMediaStrip> {
     final path = await pickVideoFromGallery();
     final user = ref.read(authStateProvider).user;
     if (path != null && user != null) {
-      final url =
-          await FirebaseStorageService.instance.uploadProfileGalleryVideo(path);
-      if (!mounted) return;
-      ref.read(authStateProvider.notifier).updateUser(
-            user.copyWith(
-              ownerGalleryVideoPaths: [...user.ownerGalleryVideoPaths, url],
+      try {
+        final url =
+            await FirebaseStorageService.instance.uploadProfileGalleryVideo(
+          path,
+          allowLocalFallback: false,
+        );
+        if (!mounted) return;
+        if (!FirestorePetRepository.isShareableMediaUrl(url)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Could not upload video. Check your connection and try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
             ),
           );
-      setState(() {});
+          return;
+        }
+        ref.read(authStateProvider.notifier).updateUser(
+              user.copyWith(
+                ownerGalleryVideoPaths: [...user.ownerGalleryVideoPaths, url],
+              ),
+            );
+        setState(() {});
+      } on FirebaseException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not upload video (${_firebaseErrorSnackText(e)}). '
+              'If this is not the network, check Firebase Storage rules and App Check.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not upload video: ${_firebaseErrorSnackText(e)}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 

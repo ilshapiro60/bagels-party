@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -15,6 +16,7 @@ import '../../widgets/paw_video_thumb.dart';
 import '../../widgets/personality_slider.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_pet_repository.dart';
+import '../../services/vet_clinic_geocode.dart';
 
 class CreatePetScreen extends ConsumerStatefulWidget {
   const CreatePetScreen({super.key, this.editPetId, this.initialPet});
@@ -61,12 +63,46 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
 
   // Step 4: Bio & Health
   final _bioController = TextEditingController();
+  final _vetNameController = TextEditingController();
+  final _vetAddressController = TextEditingController();
+  double? _vetLat;
+  double? _vetLng;
+  bool _vetGeocoding = false;
   bool _isSpayedNeutered = false;
   bool _isVaccinated = false;
   bool _saving = false;
 
   static bool _isRemoteMedia(String path) {
     return FirestorePetRepository.isShareableMediaUrl(path);
+  }
+
+  void _snackMediaUploadFailed() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not upload media. Check your connection and try again. '
+          'Only files saved to the cloud are visible to other pet parents on Discover.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _snackStorageFailed(Object e) {
+    final detail = e is FirebaseException
+        ? (e.message != null && e.message!.trim().isNotEmpty
+            ? '${e.code}: ${e.message}'
+            : e.code)
+        : e.toString();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Could not upload media ($detail). If the network is fine, deploy '
+          'storage.rules and check App Check → Storage enforcement.',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -140,6 +176,10 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
       ..clear()
       ..addAll(p.triggers);
     _bioController.text = p.bio ?? '';
+    _vetNameController.text = p.vetClinicName ?? '';
+    _vetAddressController.text = p.vetClinicAddress ?? '';
+    _vetLat = p.vetClinicLatitude;
+    _vetLng = p.vetClinicLongitude;
     _isSpayedNeutered = p.isSpayedNeutered;
     _isVaccinated = p.isVaccinated;
   }
@@ -150,7 +190,50 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
     _nameController.dispose();
     _breedController.dispose();
     _bioController.dispose();
+    _vetNameController.dispose();
+    _vetAddressController.dispose();
     super.dispose();
+  }
+
+  Future<void> _lookUpVetCoordinates() async {
+    final addr = _vetAddressController.text.trim();
+    if (addr.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a clinic address first.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    setState(() => _vetGeocoding = true);
+    try {
+      final g = await tryGeocodeVetAddress(addr);
+      if (!mounted) return;
+      if (g == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No coordinates found. Try simplifying the address or check your connection.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _vetLat = g.lat;
+        _vetLng = g.lng;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Coordinates saved for this clinic.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _vetGeocoding = false);
+    }
   }
 
   Future<void> _nextStep() async {
@@ -211,10 +294,27 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
         if (_isRemoteMedia(prof)) {
           photoUrl = prof;
         } else {
-          photoUrl = await storage.uploadPetAvatar(
-            localPath: prof,
-            petId: petId,
-          );
+          try {
+            final uploaded = await storage.uploadPetAvatar(
+              localPath: prof,
+              petId: petId,
+              allowLocalFallback: false,
+            );
+            if (!FirestorePetRepository.isShareableMediaUrl(uploaded)) {
+              if (!mounted) return;
+              _snackMediaUploadFailed();
+              return;
+            }
+            photoUrl = uploaded;
+          } on FirebaseException catch (e) {
+            if (!mounted) return;
+            _snackStorageFailed(e);
+            return;
+          } catch (e) {
+            if (!mounted) return;
+            _snackStorageFailed(e);
+            return;
+          }
         }
       } else if (isEdit) {
         photoUrl = _baselinePet!.photoUrl;
@@ -225,9 +325,27 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
         if (_isRemoteMedia(path)) {
           photoGallery.add(path);
         } else {
-          photoGallery.add(
-            await storage.uploadPetGalleryPhoto(localPath: path, petId: petId),
-          );
+          try {
+            final uploaded = await storage.uploadPetGalleryPhoto(
+              localPath: path,
+              petId: petId,
+              allowLocalFallback: false,
+            );
+            if (!FirestorePetRepository.isShareableMediaUrl(uploaded)) {
+              if (!mounted) return;
+              _snackMediaUploadFailed();
+              return;
+            }
+            photoGallery.add(uploaded);
+          } on FirebaseException catch (e) {
+            if (!mounted) return;
+            _snackStorageFailed(e);
+            return;
+          } catch (e) {
+            if (!mounted) return;
+            _snackStorageFailed(e);
+            return;
+          }
         }
       }
       final videoPaths = <String>[];
@@ -235,12 +353,58 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
         if (_isRemoteMedia(path)) {
           videoPaths.add(path);
         } else {
-          videoPaths.add(
-            await storage.uploadPetVideo(localPath: path, petId: petId),
-          );
+          try {
+            final uploaded = await storage.uploadPetVideo(
+              localPath: path,
+              petId: petId,
+              allowLocalFallback: false,
+            );
+            if (!FirestorePetRepository.isShareableMediaUrl(uploaded)) {
+              if (!mounted) return;
+              _snackMediaUploadFailed();
+              return;
+            }
+            videoPaths.add(uploaded);
+          } on FirebaseException catch (e) {
+            if (!mounted) return;
+            _snackStorageFailed(e);
+            return;
+          } catch (e) {
+            if (!mounted) return;
+            _snackStorageFailed(e);
+            return;
+          }
         }
       }
 
+      final vetName = _vetNameController.text.trim();
+      final vetAddr = _vetAddressController.text.trim();
+      var vetLat = _vetLat;
+      var vetLng = _vetLng;
+      if (vetName.isNotEmpty &&
+          vetAddr.isNotEmpty &&
+          (vetLat == null || vetLng == null)) {
+        final g = await tryGeocodeVetAddress(vetAddr);
+        if (g != null) {
+          vetLat = g.lat;
+          vetLng = g.lng;
+          if (mounted) {
+            setState(() {
+              _vetLat = vetLat;
+              _vetLng = vetLng;
+            });
+          }
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Vet clinic saved without map coordinates — address could not be located.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
       final pet = Pet(
         id: petId,
         ownerId: user.id,
@@ -268,6 +432,13 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
         averageRating: isEdit ? _baselinePet!.averageRating : 0.0,
         ownerApproxLat: isEdit ? _baselinePet!.ownerApproxLat : null,
         ownerApproxLng: isEdit ? _baselinePet!.ownerApproxLng : null,
+        vetClinicName: vetName.isEmpty ? null : vetName,
+        vetClinicAddress: vetAddr.isEmpty ? null : vetAddr,
+        vetClinicLatitude: vetName.isEmpty ? null : vetLat,
+        vetClinicLongitude: vetName.isEmpty ? null : vetLng,
+        vetGooglePlaceId: isEdit && vetName.isNotEmpty
+            ? _baselinePet!.vetGooglePlaceId
+            : null,
       );
 
       if (isEdit) {
@@ -324,10 +495,20 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
       ),
     );
     if (!mounted || source == null) return;
-    final path = source == ImageSource.gallery
-        ? await pickPhotoFromGallery()
-        : await pickPhotoFromCamera();
-    if (path != null) setState(() => _profilePhotoPath = path);
+    try {
+      final path = source == ImageSource.gallery
+          ? await pickPhotoFromGallery()
+          : await pickPhotoFromCamera();
+      if (path != null && mounted) setState(() => _profilePhotoPath = path);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not add photo: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _addPetGalleryPhoto() async {
@@ -355,10 +536,20 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
       ),
     );
     if (!mounted || source == null) return;
-    final path = source == ImageSource.gallery
-        ? await pickPhotoFromGallery()
-        : await pickPhotoFromCamera();
-    if (path != null) setState(() => _galleryPhotos.add(path));
+    try {
+      final path = source == ImageSource.gallery
+          ? await pickPhotoFromGallery()
+          : await pickPhotoFromCamera();
+      if (path != null && mounted) setState(() => _galleryPhotos.add(path));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not add photo: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _addPetVideo() async {
@@ -386,10 +577,20 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
       ),
     );
     if (!mounted || useCamera == null) return;
-    final path = useCamera
-        ? await pickVideoFromCamera()
-        : await pickVideoFromGallery();
-    if (path != null) setState(() => _galleryVideos.add(path));
+    try {
+      final path = useCamera
+          ? await pickVideoFromCamera()
+          : await pickVideoFromGallery();
+      if (path != null && mounted) setState(() => _galleryVideos.add(path));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not add video: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -970,6 +1171,52 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
             (v) => setState(() => _isVaccinated = v),
             Icons.vaccines,
           ),
+          const SizedBox(height: 28),
+          Text(
+            'Veterinary clinic (optional)',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _vetNameController,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Clinic name',
+              hintText: 'Optional — visible like your pet on Discover',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _vetAddressController,
+            textCapitalization: TextCapitalization.sentences,
+            maxLines: 2,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Clinic address',
+              hintText: 'Helps neighbors recognize the clinic',
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _vetGeocoding ? null : _lookUpVetCoordinates,
+            icon: _vetGeocoding
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.pin_drop_outlined),
+            label: const Text('Look up coordinates'),
+          ),
+          if (_vetLat != null && _vetLng != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Coordinates: ${_vetLat!.toStringAsFixed(5)}, ${_vetLng!.toStringAsFixed(5)}',
+                style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+              ),
+            ),
           const SizedBox(height: 32),
           Container(
             padding: const EdgeInsets.all(20),

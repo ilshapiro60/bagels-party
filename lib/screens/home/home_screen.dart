@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../config/firebase_bootstrap.dart';
 import '../../config/theme.dart';
 import '../../models/meetup.dart';
+import '../../models/party_invite.dart';
 import '../../models/pet.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_meetup_repository.dart';
+import '../../services/firestore_passport_repository.dart';
 import '../../services/firestore_profile_repository.dart';
 import '../../utils/pet_compatibility.dart';
 import '../../widgets/pet_card.dart';
@@ -23,6 +25,10 @@ class HomeScreen extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
     final pets = ref.watch(userPetsProvider);
     final meetups = ref.watch(upcomingMeetupsProvider).value ?? [];
+    final partyInvites = ref.watch(incomingPartyInvitesProvider).value ?? [];
+    final pendingInvites = partyInvites
+        .where((i) => i.status == PartyInviteStatus.pending)
+        .toList();
     final userName = authState.user?.displayName ?? 'Friend';
     final areaLabel = authState.user?.neighborhood ?? 'Nearby';
     final photoUrl = authState.user?.photoUrl;
@@ -37,8 +43,19 @@ class HomeScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: _buildQuickActions(context),
             ),
+            if (pendingInvites.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: _buildSectionHeader(context, 'Party Invitations', Icons.mail),
+              ),
+              SliverToBoxAdapter(
+                child: _buildPartyInvites(context, ref, pendingInvites),
+              ),
+            ],
             SliverToBoxAdapter(
               child: _buildPartyStoriesCard(context),
+            ),
+            SliverToBoxAdapter(
+              child: _buildAreaNewsletterCard(context),
             ),
             if (meetups.isNotEmpty) ...[
               SliverToBoxAdapter(
@@ -46,20 +63,81 @@ class HomeScreen extends ConsumerWidget {
               ),
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 200,
+                  height: 248,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: meetups.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: MeetupCard(
-                        meetup: meetups[index],
-                        currentUserId: authState.user?.id,
-                        onHostDelete: (m) =>
-                            _confirmDeleteHostedParty(context, ref, m),
-                      ),
-                    ),
+                    itemBuilder: (context, index) {
+                      final meetup = meetups[index];
+                      final userId = authState.user?.id;
+                      final isHost =
+                          userId != null && meetup.hostId == userId;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Consumer(
+                          builder: (context, ref, _) {
+                            String? guestSummary;
+                            if (isHost) {
+                              final async = ref.watch(
+                                partyInvitesForHostedMeetupProvider((
+                                  meetupId: meetup.id,
+                                  hostId: userId,
+                                )),
+                              );
+                              guestSummary = async.maybeWhen(
+                                data: (list) {
+                                  if (list.isEmpty) {
+                                    return 'No invites — tap Invite';
+                                  }
+                                  final acc = list
+                                      .where(
+                                        (i) =>
+                                            i.status ==
+                                            PartyInviteStatus.accepted,
+                                      )
+                                      .length;
+                                  final pend = list
+                                      .where(
+                                        (i) =>
+                                            i.status ==
+                                            PartyInviteStatus.pending,
+                                      )
+                                      .length;
+                                  final dec = list
+                                      .where(
+                                        (i) =>
+                                            i.status ==
+                                            PartyInviteStatus.declined,
+                                      )
+                                      .length;
+                                  final parts = <String>['$acc accepted'];
+                                  if (pend > 0) parts.add('$pend pending');
+                                  if (dec > 0) parts.add('$dec declined');
+                                  return parts.join(' · ');
+                                },
+                                orElse: () => null,
+                              );
+                            }
+                            return MeetupCard(
+                              meetup: meetup,
+                              currentUserId: userId,
+                              guestSummaryOverride: guestSummary,
+                              onHostDelete: (m) =>
+                                  _confirmDeleteHostedParty(context, ref, m),
+                              onHostInviteMore: isHost
+                                  ? () => context
+                                      .push('/invite-friends/${meetup.id}')
+                                  : null,
+                              onHostManageGuests: isHost
+                                  ? () =>
+                                      context.push('/party-guests/${meetup.id}')
+                                  : null,
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -238,6 +316,55 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       Text(
                         'Photos & videos from meetups',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: PawPartyColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: PawPartyColors.textHint),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAreaNewsletterCard(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Material(
+        color: PawPartyColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => context.push('/neighborhood-news'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: PawPartyColors.secondary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.forum_outlined, color: PawPartyColors.secondary),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Area newsletter',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        'Posts from neighbors in your area (2-week feed)',
                         style: TextStyle(
                           fontSize: 13,
                           color: PawPartyColors.textSecondary,
@@ -439,6 +566,24 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildPartyInvites(
+    BuildContext context,
+    WidgetRef ref,
+    List<PartyInvite> invites,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: invites.map((invite) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _PartyInviteCard(invite: invite),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Widget _buildNeighborhoodBanner(BuildContext context, String areaLabel) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -483,18 +628,122 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
+class _PartyInviteCard extends ConsumerStatefulWidget {
+  const _PartyInviteCard({required this.invite});
+  final PartyInvite invite;
+
+  @override
+  ConsumerState<_PartyInviteCard> createState() => _PartyInviteCardState();
+}
+
+class _PartyInviteCardState extends ConsumerState<_PartyInviteCard> {
+  bool _busy = false;
+
+  Future<void> _respond(PartyInviteStatus response) async {
+    if (_busy) return;
+    final uid = ref.read(authStateProvider).user?.id;
+    if (uid == null) return;
+
+    setState(() => _busy = true);
+    try {
+      await FirestoreMeetupRepository.respondToInvite(
+        inviteId: widget.invite.id,
+        actingUid: uid,
+        response: response,
+      );
+      if (!mounted) return;
+      final label = response == PartyInviteStatus.accepted ? 'accepted' : 'declined';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invite $label.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inv = widget.invite;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.celebration, size: 20, color: PawPartyColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    inv.meetupTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${inv.hostName} invited you to their party',
+              style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _respond(PartyInviteStatus.declined),
+                    child: const Text('Decline'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _busy
+                        ? null
+                        : () => _respond(PartyInviteStatus.accepted),
+                    child: const Text('Accept'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 Future<void> _deletePartyLinkedMedia(WidgetRef ref, String meetupId) async {
   final storage = FirebaseStorageService.instance;
   final stories = ref.read(partyStoriesProvider);
-  final entries = ref.read(passportEntriesProvider);
   final urls = <String>{};
   for (final s in stories.where((s) => s.meetupId == meetupId)) {
     urls.addAll(s.imagePaths);
     urls.addAll(s.videoPaths);
   }
-  for (final e in entries.where((e) => e.meetupId == meetupId)) {
-    urls.addAll(e.photoUrls);
-    urls.addAll(e.videoPaths);
+  if (isFirebaseInitialized) {
+    final user = ref.read(authStateProvider).user;
+    if (user != null) {
+      final passEntries =
+          await FirestorePassportRepository.fetchOwnerEntriesForMeetup(
+        ownerId: user.id,
+        meetupId: meetupId,
+      );
+      for (final e in passEntries) {
+        urls.addAll(e.photoUrls);
+        urls.addAll(e.videoPaths);
+      }
+    }
   }
   for (final u in urls) {
     await storage.deleteRemoteObjectIfPossible(u);
@@ -523,7 +772,7 @@ Future<void> _confirmDeleteHostedParty(
       title: const Text('Delete this party?'),
       content: Text(
         '“${meetup.title}” will be removed for everyone. '
-        'On this device, passport entries and party stories linked to this meetup are cleared, '
+        'Your passport entries and party stories linked to this meetup are removed, '
         'and stored photos/videos for those items are deleted when possible.',
       ),
       actions: [
@@ -554,7 +803,12 @@ Future<void> _confirmDeleteHostedParty(
 
     await _deletePartyLinkedMedia(ref, meetup.id);
     ref.read(partyStoriesProvider.notifier).removeStoriesForMeetup(meetup.id);
-    ref.read(passportEntriesProvider.notifier).removeEntriesForMeetup(meetup.id);
+    await FirestorePassportRepository.deleteEntriesForMeetup(
+      ownerId: user.id,
+      meetupId: meetup.id,
+    );
+    ref.invalidate(passportMyEntriesProvider);
+    ref.invalidate(passportPublicEntriesProvider);
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
