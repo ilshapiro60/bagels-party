@@ -220,57 +220,76 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
           ),
         ],
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          Column(
-            children: [
-              _buildSearchBar(),
-              _buildFilters(),
-              _buildRadiusSlider(showViewerOnMap),
-              _buildMapPrivacyBanner(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: NearbyPetsMap(
-                  pets: visiblePets,
+      // Only one tab's subtree at a time: two GoogleMap instances in a TabBarView
+      // often crash on iOS (platform view / Maps SDK). Swipe-between-tabs is omitted.
+      body: AnimatedBuilder(
+        animation: _tabController,
+        builder: (context, _) {
+          return _tabController.index == 0
+              ? _buildPetsDiscoverTab(
+                  visiblePets: visiblePets,
                   viewerPoint: viewerPoint,
                   viewerProfile: authState.user,
-                  radiusMiles: _radiusMiles,
-                  showViewerLocation: showViewerOnMap,
-                  onPetMarkerTapped: _showMapPetActionsSheet,
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: _listScroll,
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  itemCount: visiblePets.length,
-                  itemBuilder: (context, index) {
-                    final pet = visiblePets[index];
-                    _cardKeys[pet.id] ??= GlobalKey();
-                    final compatibility = primaryPet != null
-                        ? calculatePetCompatibility(primaryPet, pet)
-                        : 0.0;
-                    return Padding(
-                      key: _cardKeys[pet.id],
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: PetCard(
-                          pet: pet,
-                          compatibility: compatibility,
-                          onTap: () => context.push('/pet/${pet.id}'),
-                        )
-                          .animate()
-                          .fadeIn(delay: (100 * index).ms, duration: 400.ms)
-                          .slideY(begin: 0.1),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-          _buildVetClinicsTab(authState.user, showViewerOnMap),
-        ],
+                  showViewerOnMap: showViewerOnMap,
+                  primaryPet: primaryPet,
+                )
+              : _buildVetClinicsTab(authState.user, showViewerOnMap);
+        },
       ),
+    );
+  }
+
+  Widget _buildPetsDiscoverTab({
+    required List<Pet> visiblePets,
+    required GeoPoint viewerPoint,
+    required UserProfile? viewerProfile,
+    required bool showViewerOnMap,
+    required Pet? primaryPet,
+  }) {
+    return Column(
+      children: [
+        _buildSearchBar(),
+        _buildFilters(),
+        _buildRadiusSlider(showViewerOnMap),
+        _buildMapPrivacyBanner(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: NearbyPetsMap(
+            pets: visiblePets,
+            viewerPoint: viewerPoint,
+            viewerProfile: viewerProfile,
+            radiusMiles: _radiusMiles,
+            showViewerLocation: showViewerOnMap,
+            onPetMarkerTapped: _showMapPetActionsSheet,
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            controller: _listScroll,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            itemCount: visiblePets.length,
+            itemBuilder: (context, index) {
+              final pet = visiblePets[index];
+              _cardKeys[pet.id] ??= GlobalKey();
+              final compatibility = primaryPet != null
+                  ? calculatePetCompatibility(primaryPet, pet)
+                  : 0.0;
+              return Padding(
+                key: _cardKeys[pet.id],
+                padding: const EdgeInsets.only(bottom: 12),
+                child: PetCard(
+                    pet: pet,
+                    compatibility: compatibility,
+                    onTap: () => context.push('/pet/${pet.id}'),
+                  )
+                    .animate()
+                    .fadeIn(delay: (100 * index).ms, duration: 400.ms)
+                    .slideY(begin: 0.1),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
