@@ -6,6 +6,7 @@ import '../config/theme.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
 import '../services/approximate_location.dart';
+import '../utils/safe_map_geometry.dart';
 import 'expandable_map_frame.dart';
 import 'map_unavailable_placeholder.dart';
 
@@ -56,10 +57,7 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
   Set<Marker> _buildMarkers() {
     final markers = <Marker>{};
     if (widget.showViewerLocation) {
-      final you = LatLng(
-        widget.viewerPoint.latitude,
-        widget.viewerPoint.longitude,
-      );
+      final you = safeMapLatLngFromGeo(widget.viewerPoint);
       markers.add(
         Marker(
           markerId: const MarkerId('you'),
@@ -75,7 +73,7 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
 
     for (final pet in widget.pets) {
       final pt = ownerApproximateArea(pet, viewer: widget.viewerProfile);
-      final pos = LatLng(pt.latitude, pt.longitude);
+      final pos = safeMapLatLngFromGeo(pt);
       final hue = switch (pet.type) {
         'Dog' => BitmapDescriptor.hueOrange,
         'Cat' => BitmapDescriptor.hueViolet,
@@ -83,7 +81,7 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
       };
       markers.add(
         Marker(
-          markerId: MarkerId(pet.id),
+          markerId: MarkerId(pet.id.isEmpty ? 'pet_unknown' : pet.id),
           position: pos,
           icon: BitmapDescriptor.defaultMarkerWithHue(hue),
           infoWindow: InfoWindow(
@@ -101,12 +99,12 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
 
   Set<Circle> _buildCircles() {
     if (!widget.showViewerLocation) return {};
-    final you = LatLng(widget.viewerPoint.latitude, widget.viewerPoint.longitude);
+    final you = safeMapLatLngFromGeo(widget.viewerPoint);
     return {
       Circle(
         circleId: const CircleId('search_radius'),
         center: you,
-        radius: widget.radiusMiles * 1609.34,
+        radius: safeCircleRadiusMeters(widget.radiusMiles * 1609.34),
         fillColor: PawPartyColors.primary.withValues(alpha: 0.08),
         strokeColor: PawPartyColors.primary.withValues(alpha: 0.45),
         strokeWidth: 2,
@@ -115,15 +113,12 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
   }
 
   Widget _googleMap(double? maxHeight) {
-    final target = LatLng(
-      widget.viewerPoint.latitude,
-      widget.viewerPoint.longitude,
-    );
+    final target = safeMapLatLngFromGeo(widget.viewerPoint);
     final fullscreen = maxHeight == null;
     final map = GoogleMap(
       initialCameraPosition: CameraPosition(
         target: target,
-        zoom: _zoomForRadius(widget.radiusMiles),
+        zoom: safeMapZoom(_zoomForRadius(widget.radiusMiles)),
       ),
       markers: _buildMarkers(),
       circles: _buildCircles(),

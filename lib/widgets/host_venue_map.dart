@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../config/map_platform.dart';
 import '../config/theme.dart';
 import '../services/approximate_location.dart';
+import '../utils/safe_map_geometry.dart';
 import 'expandable_map_frame.dart';
 import 'map_unavailable_placeholder.dart';
 
@@ -38,12 +39,13 @@ class HostVenueMap extends StatelessWidget {
       anchorLng: anchorLng,
       stableKey: 'pawparty:host_venue_preview',
     );
-    final target = LatLng(venue.latitude, venue.longitude);
+    final target = safeMapLatLngFromGeo(venue);
 
     Widget mapFor(double? maxHeight) {
       final fullscreen = maxHeight == null;
       final map = GoogleMap(
-        initialCameraPosition: CameraPosition(target: target, zoom: 14.5),
+        initialCameraPosition:
+            CameraPosition(target: target, zoom: safeMapZoom(14.5)),
         markers: {
           Marker(
             markerId: const MarkerId('venue_approx'),
@@ -59,7 +61,7 @@ class HostVenueMap extends StatelessWidget {
           Circle(
             circleId: const CircleId('venue_uncertainty'),
             center: target,
-            radius: 650,
+            radius: safeCircleRadiusMeters(650),
             fillColor: PawPartyColors.secondary.withValues(alpha: 0.12),
             strokeColor: PawPartyColors.secondary.withValues(alpha: 0.4),
             strokeWidth: 2,
