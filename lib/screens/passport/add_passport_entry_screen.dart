@@ -330,7 +330,7 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
           Text('Pet', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           DropdownButtonFormField<Pet>(
-            value: pet,
+            initialValue: pet,
             items: pets
                 .map(
                   (p) => DropdownMenuItem(
@@ -362,7 +362,7 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
           ),
           if (_useLinkedMeetup && meetups.isNotEmpty) ...[
             DropdownButtonFormField<Meetup>(
-              value: _linkedMeetup,
+              initialValue: _linkedMeetup,
               items: meetups
                   .map(
                     (m) => DropdownMenuItem(

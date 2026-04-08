@@ -241,7 +241,7 @@ class _ManagePartyGuestsScreenState extends ConsumerState<ManagePartyGuestsScree
           return ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: sorted.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (context, _) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final inv = sorted[i];
               return ListTile(

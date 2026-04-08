@@ -65,12 +65,10 @@ class _PawPartyAppState extends ConsumerState<PawPartyApp> {
       ),
     );
     Future.delayed(const Duration(seconds: 6), () {
-      if (mounted) {
-        final c = appRouter.routerDelegate.navigatorKey.currentContext;
-        if (c != null) {
-          ScaffoldMessenger.of(c).hideCurrentMaterialBanner();
-        }
-      }
+      if (!mounted) return;
+      final c = appRouter.routerDelegate.navigatorKey.currentContext;
+      if (c == null || !c.mounted) return;
+      ScaffoldMessenger.of(c).hideCurrentMaterialBanner();
     });
   }
 
