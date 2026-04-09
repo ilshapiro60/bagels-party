@@ -11,11 +11,8 @@ class StripeConfig {
   /// Replace with your real key from the Stripe Dashboard.
   static const publishableKey = 'pk_test_REPLACE_WITH_YOUR_PUBLISHABLE_KEY';
 
-  /// The Cloud Function endpoint that creates a PaymentIntent.
-  /// After deploying Cloud Functions this will be:
-  ///   https://<region>-<project>.cloudfunctions.net/createPaymentIntent
-  ///
-  /// During development you can use the Functions emulator URL instead.
+  // Cloud Function endpoint that creates a PaymentIntent.
+  // After deploying, replace YOUR_PROJECT_ID with your Firebase project ID.
   static const paymentIntentEndpoint =
       'https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/createPaymentIntent';
 
