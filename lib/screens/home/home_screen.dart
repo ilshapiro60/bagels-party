@@ -44,9 +44,6 @@ class HomeScreen extends ConsumerWidget {
               child: _buildHeader(context, userName, areaLabel, photoUrl),
             ),
             SliverToBoxAdapter(
-              child: _buildQuickActions(context),
-            ),
-            SliverToBoxAdapter(
               child: _buildFriendsSection(context, ref, authState.user),
             ),
             if (pendingInvites.isNotEmpty) ...[
@@ -57,12 +54,6 @@ class HomeScreen extends ConsumerWidget {
                 child: _buildPartyInvites(context, ref, pendingInvites),
               ),
             ],
-            SliverToBoxAdapter(
-              child: _buildPartyStoriesCard(context),
-            ),
-            SliverToBoxAdapter(
-              child: _buildAreaNewsletterCard(context),
-            ),
             SliverToBoxAdapter(
               child: _buildNearbyEventsPreview(context, ref, authState.user),
             ),
@@ -142,12 +133,6 @@ class HomeScreen extends ConsumerWidget {
                                   ? () =>
                                       context.push('/party-guests/${meetup.id}')
                                   : null,
-                              onAddPhotos: () => context.push(
-                                Uri(path: '/add-story', queryParameters: {
-                                  'meetupId': meetup.id,
-                                  'meetupTitle': meetup.title,
-                                }).toString(),
-                              ),
                             );
                           },
                         ),
@@ -182,6 +167,9 @@ class HomeScreen extends ConsumerWidget {
             ),
             SliverToBoxAdapter(
               child: _buildNearbyMatches(context, ref, pets),
+            ),
+            SliverToBoxAdapter(
+              child: _buildNewsletterCard(context),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
@@ -247,43 +235,46 @@ class HomeScreen extends ConsumerWidget {
     ).animate().fadeIn(duration: 500.ms);
   }
 
-  Widget _buildQuickActions(BuildContext context) {
+  Widget _buildNewsletterCard(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _quickActionCard(
-              context,
-              icon: Icons.local_pizza,
-              label: 'Host a\nparty',
-              color: PawPartyColors.primary,
-              onTap: () => context.go('/host'),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Material(
+        color: PawPartyColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => context.push('/neighborhood-news'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.forum_outlined, size: 22, color: PawPartyColors.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Area Newsletter',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Lost pets, tips, local buzz & more',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: PawPartyColors.textHint,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, size: 18, color: PawPartyColors.textHint),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _quickActionCard(
-              context,
-              icon: Icons.search,
-              label: 'Discover\nPets',
-              color: PawPartyColors.secondary,
-              onTap: () => context.go('/discover'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _quickActionCard(
-              context,
-              icon: Icons.auto_stories,
-              label: 'Passport\nJournal',
-              color: PawPartyColors.pizzaGold,
-              onTap: () => context.go('/passport'),
-            ),
-          ),
-        ],
+        ),
       ),
-    ).animate().fadeIn(delay: 200.ms, duration: 500.ms);
+    );
   }
 
   Widget _buildFriendsSection(
@@ -403,7 +394,7 @@ class HomeScreen extends ConsumerWidget {
                   Text('Events nearby', style: Theme.of(context).textTheme.titleMedium),
                   const Spacer(),
                   TextButton(
-                    onPressed: () => context.go('/discover'),
+                    onPressed: () => context.go('/discover', extra: 2),
                     style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -419,111 +410,6 @@ class HomeScreen extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildPartyStoriesCard(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
-      child: Material(
-        color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => context.push('/party-stories'),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                Icon(Icons.celebration, size: 20, color: PawPartyColors.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Party stories',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-                Text(
-                  'Photos & videos',
-                  style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
-                ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 18, color: PawPartyColors.textHint),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAreaNewsletterCard(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-      child: Material(
-        color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => context.push('/neighborhood-news'),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                Icon(Icons.forum_outlined, size: 20, color: PawPartyColors.secondary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Area newsletter',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-                Text(
-                  '2-week feed',
-                  style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
-                ),
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right, size: 18, color: PawPartyColors.textHint),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _quickActionCard(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: color),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: PawPartyColors.textPrimary,
-                    fontSize: 12,
-                  ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -809,7 +695,7 @@ class _NearbyEventTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () => context.go('/discover'),
+          onTap: () => context.go('/discover', extra: 2),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
@@ -1076,8 +962,8 @@ Future<void> _confirmDeleteHostedParty(
       title: const Text('Delete this party?'),
       content: Text(
         '“${meetup.title}” will be removed for everyone. '
-        'Your passport entries and party stories linked to this meetup are removed, '
-        'and stored photos/videos for those items are deleted when possible.',
+        'Your passport entries and album photos linked to this meetup are removed, '
+        'and stored photos/videos are deleted when possible.',
       ),
       actions: [
         TextButton(

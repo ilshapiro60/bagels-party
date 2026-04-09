@@ -14,7 +14,7 @@ import '../models/meetup.dart';
 import '../models/party_invite.dart';
 import '../models/pet_buddy_owner_mute.dart';
 import '../models/pet_buddy_request.dart';
-import '../models/party_story.dart';
+import '../models/journal_comment.dart';
 import '../models/passport_entry.dart';
 import '../models/community_vet_clinic.dart';
 import '../models/neighborhood_news.dart';
@@ -25,9 +25,10 @@ import '../services/auth_persistence.dart';
 import '../services/device_location_service.dart';
 import '../services/firebase_user_mapper.dart';
 import '../models/direct_message.dart';
+import '../models/party_album_item.dart';
+import '../services/firestore_party_album_repository.dart';
 import '../services/firestore_meetup_repository.dart';
 import '../services/firestore_message_repository.dart';
-import '../services/firestore_story_repository.dart';
 import '../services/firestore_passport_repository.dart';
 import '../services/firestore_pet_buddy_repository.dart';
 import '../services/firestore_neighborhood_news_repository.dart';
@@ -603,7 +604,7 @@ final communityVetClinicsProvider = Provider<List<CommunityVetClinic>>((ref) {
   return list;
 });
 
-/// Area newsletter posts (last 14 days) for the signed-in user's [UserProfile.neighborhoodKey].
+/// Area newsletter posts (last 30 days) for the signed-in user's [UserProfile.neighborhoodKey].
 final neighborhoodNewsPostsProvider =
     StreamProvider<List<NeighborhoodNewsPost>>((ref) {
   final user = ref.watch(authStateProvider).user;
@@ -755,26 +756,6 @@ class SelectedTabNotifier extends Notifier<int> {
   }
 }
 
-/// Stories by the current user (for "My stories" screen).
-final myPartyStoriesProvider =
-    StreamProvider.family<List<PartyStory>, String>((ref, authorId) {
-  if (!isFirebaseInitialized) return Stream.value([]);
-  return FirestoreStoryRepository.watchStoriesByAuthor(authorId);
-});
-
-/// Stories linked to a specific meetup/party.
-final meetupStoriesProvider =
-    StreamProvider.family<List<PartyStory>, String>((ref, meetupId) {
-  if (!isFirebaseInitialized) return Stream.value([]);
-  return FirestoreStoryRepository.watchStoriesForMeetup(meetupId);
-});
-
-/// Community stories from the last 30 days (for Discover Events tab).
-final communityStoriesProvider = StreamProvider<List<PartyStory>>((ref) {
-  if (!isFirebaseInitialized) return Stream.value([]);
-  return FirestoreStoryRepository.watchCommunityStories();
-});
-
 /// All conversations for the current user (inbox).
 final conversationsProvider = StreamProvider<List<Conversation>>((ref) {
   final uid = ref.watch(authStateProvider).user?.id;
@@ -787,4 +768,18 @@ final messagesProvider =
     StreamProvider.family<List<DirectMessage>, String>((ref, conversationId) {
   if (!isFirebaseInitialized) return Stream.value([]);
   return FirestoreMessageRepository.watchMessages(conversationId);
+});
+
+/// Shared party album photos for a specific meetup.
+final partyAlbumProvider =
+    StreamProvider.family<List<PartyAlbumItem>, String>((ref, meetupId) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestorePartyAlbumRepository.watchAlbumForMeetup(meetupId);
+});
+
+/// Comments on a public journal entry.
+final journalCommentsProvider =
+    StreamProvider.family<List<JournalComment>, String>((ref, entryId) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestorePassportRepository.watchComments(entryId);
 });

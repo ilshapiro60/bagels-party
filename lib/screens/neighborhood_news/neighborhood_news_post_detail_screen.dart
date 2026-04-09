@@ -250,7 +250,7 @@ class _NeighborhoodNewsPostDetailScreenState
         data: (list) {
           final post = _resolvePost(list);
           if (post == null) {
-            return const Center(child: Text('Post not found or older than 2 weeks.'));
+            return const Center(child: Text('Post not found or older than 30 days.'));
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

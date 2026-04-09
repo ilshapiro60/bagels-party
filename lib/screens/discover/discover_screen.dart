@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../models/community_vet_clinic.dart';
 import '../../models/meetup.dart';
-import '../../models/party_story.dart';
 import '../../models/pet.dart';
 import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
@@ -17,11 +16,13 @@ import '../../utils/open_external_maps.dart';
 import '../../utils/pet_compatibility.dart';
 import '../../widgets/community_vet_clinics_map.dart';
 import '../../widgets/nearby_pets_map.dart';
-import '../../widgets/paw_file_image.dart';
 import '../../widgets/pet_card.dart';
 
 class DiscoverScreen extends ConsumerStatefulWidget {
-  const DiscoverScreen({super.key});
+  const DiscoverScreen({super.key, this.initialTab = 0});
+
+  /// 0 = Pets, 1 = Vets, 2 = Events
+  final int initialTab;
 
   @override
   ConsumerState<DiscoverScreen> createState() => _DiscoverScreenState();
@@ -44,7 +45,11 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 2),
+    );
   }
 
   @override
@@ -614,11 +619,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
 
   Widget _buildEventsTab(UserProfile? user) {
     final eventsAsync = ref.watch(publicMeetupsProvider);
-    final storiesAsync = ref.watch(communityStoriesProvider);
     final myUid = user?.id;
-
-    final communityStories = storiesAsync.value ?? <PartyStory>[];
-    final nearbyStories = _filterStoriesByDistance(communityStories, user);
 
     return eventsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -642,10 +643,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
           return d <= _radiusMiles * 1609.34;
         }).toList();
 
-        final hasStories = nearbyStories.isNotEmpty;
-        final hasEvents = filtered.isNotEmpty;
-
-        if (!hasStories && !hasEvents) {
+        if (filtered.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
@@ -680,16 +678,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
 
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          itemCount: (hasStories ? 1 : 0) + filtered.length,
+          itemCount: filtered.length,
           itemBuilder: (context, i) {
-            if (hasStories && i == 0) {
-              return _CommunityStoriesStrip(stories: nearbyStories);
-            }
-            final eventIndex = hasStories ? i - 1 : i;
-            final m = filtered[eventIndex];
+            final m = filtered[i];
             final isHost = m.hostId == myUid;
             return Padding(
-              padding: EdgeInsets.only(top: eventIndex > 0 ? 10 : 0),
+              padding: EdgeInsets.only(top: i > 0 ? 10 : 0),
               child: _EventCard(
                 meetup: m,
                 isHost: isHost,
@@ -701,22 +695,6 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
         );
       },
     );
-  }
-
-  List<PartyStory> _filterStoriesByDistance(
-    List<PartyStory> stories,
-    UserProfile? user,
-  ) {
-    if (user?.latitude == null || user?.longitude == null) return stories;
-    final maxM = _radiusMiles * 1609.34;
-    return stories.where((s) {
-      if (s.latitude == null || s.longitude == null) return true;
-      final d = haversineMeters(
-        GeoPoint(user!.latitude!, user.longitude!),
-        GeoPoint(s.latitude!, s.longitude!),
-      );
-      return d <= maxM;
-    }).toList();
   }
 
   void _showEventDetailSheet(Meetup meetup, UserProfile? user) {
@@ -1222,189 +1200,3 @@ class _EventDetailSheetState extends State<_EventDetailSheet> {
   }
 }
 
-class _CommunityStoriesStrip extends StatelessWidget {
-  const _CommunityStoriesStrip({required this.stories});
-
-  final List<PartyStory> stories;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            'Recent party stories',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-        ),
-        SizedBox(
-          height: 140,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: stories.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, i) {
-              final s = stories[i];
-              return _CommunityStoryTile(story: s);
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-}
-
-class _CommunityStoryTile extends StatelessWidget {
-  const _CommunityStoryTile({required this.story});
-
-  final PartyStory story;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasImage = story.imagePaths.isNotEmpty;
-    final dateLabel = DateFormat('MMM d').format(story.createdAt);
-
-    return GestureDetector(
-      onTap: () => _showStorySheet(context, story),
-      child: Container(
-        width: 130,
-        decoration: BoxDecoration(
-          color: PawPartyColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: PawPartyColors.divider),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: hasImage
-                  ? PawFileOrNetworkImage(path: story.imagePaths.first)
-                  : Container(
-                      color: PawPartyColors.secondary.withValues(alpha: 0.12),
-                      child: Icon(Icons.auto_awesome,
-                          size: 32, color: PawPartyColors.secondary),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    story.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${story.authorName} · $dateLabel',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 10, color: PawPartyColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showStorySheet(BuildContext context, PartyStory s) {
-    final dateStr = DateFormat('MMM d, yyyy').format(s.createdAt);
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor:
-                        PawPartyColors.secondary.withValues(alpha: 0.2),
-                    child: s.authorPhotoPath != null &&
-                            s.authorPhotoPath!.isNotEmpty
-                        ? ClipOval(
-                            child: PawFileOrNetworkImage(
-                              path: s.authorPhotoPath!,
-                              width: 36,
-                              height: 36,
-                            ),
-                          )
-                        : Text(
-                            s.authorName.isNotEmpty ? s.authorName[0] : '?',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: PawPartyColors.secondary),
-                          ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(s.authorName,
-                            style: Theme.of(ctx).textTheme.titleMedium),
-                        Text(dateStr,
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: PawPartyColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Text(s.title,
-                  style: Theme.of(ctx).textTheme.titleLarge),
-              if (s.caption != null && s.caption!.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(s.caption!, style: Theme.of(ctx).textTheme.bodyMedium),
-              ],
-              if (s.hasMedia) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 180,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      ...s.imagePaths.map(
-                        (p) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: SizedBox(
-                              width: 180,
-                              height: 180,
-                              child: PawFileOrNetworkImage(path: p),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

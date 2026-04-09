@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/neighborhood_news.dart';
+import '../models/passport_entry.dart';
 import '../models/pet.dart';
 import '../providers/app_providers.dart';
 import '../screens/auth/login_screen.dart';
@@ -16,8 +17,6 @@ import '../screens/meetup/host_meetup_screen.dart';
 import '../screens/passport/passport_screen.dart';
 import '../screens/passport/add_passport_entry_screen.dart';
 import '../screens/profile/profile_screen.dart';
-import '../screens/stories/party_stories_screen.dart';
-import '../screens/stories/add_story_screen.dart';
 import '../screens/pet/pet_detail_screen.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/friends/friends_screen.dart';
@@ -82,10 +81,13 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/discover',
-          pageBuilder: (context, state) => NoTransitionPage(
-            key: state.pageKey,
-            child: const DiscoverScreen(),
-          ),
+          pageBuilder: (context, state) {
+            final tab = state.extra is int ? state.extra as int : 0;
+            return NoTransitionPage(
+              key: state.pageKey,
+              child: DiscoverScreen(initialTab: tab),
+            );
+          },
         ),
         GoRoute(
           path: '/passport',
@@ -131,18 +133,6 @@ final appRouter = GoRouter(
       builder: (context, state) => const HostMeetupScreen(),
     ),
     GoRoute(
-      path: '/party-stories',
-      builder: (context, state) => const PartyStoriesScreen(),
-    ),
-    GoRoute(
-      path: '/add-story',
-      builder: (context, state) {
-        final meetupId = state.uri.queryParameters['meetupId'];
-        final meetupTitle = state.uri.queryParameters['meetupTitle'];
-        return AddStoryScreen(meetupId: meetupId, meetupTitle: meetupTitle);
-      },
-    ),
-    GoRoute(
       path: '/friends',
       builder: (context, state) => const FriendsScreen(),
     ),
@@ -174,6 +164,9 @@ final appRouter = GoRouter(
       path: '/add-passport-entry',
       builder: (context, state) {
         final extra = state.extra;
+        if (extra is PassportEntry) {
+          return AddPassportEntryScreen(existingEntry: extra);
+        }
         final initialPetId = extra is String ? extra : null;
         return AddPassportEntryScreen(initialPetId: initialPetId);
       },

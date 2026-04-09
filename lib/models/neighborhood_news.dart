@@ -67,7 +67,7 @@ class NewsCategory {
   }
 }
 
-/// Shared area newsletter post (2-week retention enforced by query + optional TTL).
+/// Shared area newsletter post (30-day retention enforced by query + optional TTL).
 class NeighborhoodNewsPost {
   const NeighborhoodNewsPost({
     required this.id,

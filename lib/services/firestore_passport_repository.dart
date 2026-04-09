@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/journal_comment.dart';
 import '../models/passport_entry.dart';
 
 class FirestorePassportRepository {
@@ -92,5 +93,46 @@ class FirestorePassportRepository {
       batch.delete(d.reference);
     }
     await batch.commit();
+  }
+
+  // ── Journal Comments (subcollection of passportEntries) ──
+
+  static CollectionReference<Map<String, dynamic>> _comments(String entryId) =>
+      _col.doc(entryId).collection('comments');
+
+  static Stream<List<JournalComment>> watchComments(String entryId) {
+    return _comments(entryId)
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((s) =>
+            s.docs.map((d) => JournalComment.fromDoc(d, entryId)).toList());
+  }
+
+  static Future<void> addComment({
+    required String entryId,
+    required String authorId,
+    required String authorDisplayName,
+    required String body,
+  }) async {
+    await _comments(entryId).add({
+      'authorId': authorId,
+      'authorDisplayName': authorDisplayName,
+      'body': body,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Future<void> deleteComment({
+    required String entryId,
+    required String commentId,
+    required String actingUid,
+  }) async {
+    final ref = _comments(entryId).doc(commentId);
+    final snap = await ref.get();
+    if (!snap.exists) return;
+    if (snap.data()?['authorId'] != actingUid) {
+      throw StateError('Only the author can delete this comment.');
+    }
+    await ref.delete();
   }
 }

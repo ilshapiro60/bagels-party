@@ -18,9 +18,18 @@ import '../../utils/media_picker_utils.dart';
 import '../../widgets/paw_file_image.dart';
 
 class AddPassportEntryScreen extends ConsumerStatefulWidget {
-  const AddPassportEntryScreen({super.key, this.initialPetId});
+  const AddPassportEntryScreen({
+    super.key,
+    this.initialPetId,
+    this.existingEntry,
+  });
 
   final String? initialPetId;
+
+  /// When non-null, the screen edits this entry instead of creating a new one.
+  final PassportEntry? existingEntry;
+
+  bool get isEditing => existingEntry != null;
 
   @override
   ConsumerState<AddPassportEntryScreen> createState() =>
@@ -44,19 +53,40 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
   bool _playedWell = true;
   bool _isPublic = false;
   final List<String> _localPhotoPaths = [];
+  final List<String> _existingPhotoUrls = [];
   bool _saving = false;
   DateTime _partyDate = DateTime.now();
 
   @override
   void initState() {
     super.initState();
+
+    final existing = widget.existingEntry;
+    if (existing != null) {
+      _titleController.text = existing.meetupTitle;
+      _hostController.text = existing.hostName;
+      _themeController.text = existing.meetupTheme ?? '';
+      _metPetsController.text = existing.metPetNames.join(', ');
+      _notesController.text = existing.behaviorNotes ?? '';
+      _warmUpController.text = existing.warmUpMinutes.toString();
+      _outcome = existing.playOutcome;
+      _rating = existing.rating;
+      _wasAnxious = existing.wasAnxious;
+      _playedWell = existing.playedWell;
+      _isPublic = existing.isPublic;
+      _partyDate = existing.date;
+      _existingPhotoUrls.addAll(existing.photoUrls);
+      _useLinkedMeetup = false;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final pets = ref.read(userPetsProvider);
       if (pets.isEmpty) return;
       Pet? initial;
-      if (widget.initialPetId != null) {
+      final targetPetId = existing?.petId ?? widget.initialPetId;
+      if (targetPetId != null) {
         for (final p in pets) {
-          if (p.id == widget.initialPetId) {
+          if (p.id == targetPetId) {
             initial = p;
             break;
           }
@@ -186,9 +216,10 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
         : _notesController.text.trim();
     final warmUp = int.tryParse(_warmUpController.text.trim()) ?? 0;
 
-    final entryId = const Uuid().v4();
+    final entryId = widget.existingEntry?.id ?? const Uuid().v4();
+    final isCreate = widget.existingEntry == null;
     final storage = FirebaseStorageService.instance;
-    final photoUrls = <String>[];
+    final photoUrls = <String>[..._existingPhotoUrls];
 
     setState(() => _saving = true);
     try {
@@ -243,14 +274,14 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
         searchText: searchText,
       );
 
-      await FirestorePassportRepository.upsertEntry(entry, isCreate: true);
+      await FirestorePassportRepository.upsertEntry(entry, isCreate: isCreate);
       ref.invalidate(passportMyEntriesProvider);
       ref.invalidate(passportPublicEntriesProvider);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Passport entry saved'),
+        SnackBar(
+          content: Text(widget.isEditing ? 'Entry updated' : 'Passport entry saved'),
           backgroundColor: PawPartyColors.success,
         ),
       );
@@ -309,8 +340,8 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
     final pet = _selectedPet ?? pets.first;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add journal entry'),
+        appBar: AppBar(
+        title: Text(widget.isEditing ? 'Edit journal entry' : 'Add journal entry'),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
@@ -498,6 +529,37 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
             spacing: 8,
             runSpacing: 8,
             children: [
+              ..._existingPhotoUrls.map(
+                (url) => Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        width: 72,
+                        height: 72,
+                        child: PawFileOrNetworkImage(path: url),
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: GestureDetector(
+                        onTap: () =>
+                            setState(() => _existingPhotoUrls.remove(url)),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(Icons.close,
+                              size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               ..._localPhotoPaths.map(
                 (path) => Stack(
                   children: [
@@ -512,10 +574,18 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
                     Positioned(
                       right: 0,
                       top: 0,
-                      child: IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () =>
+                      child: GestureDetector(
+                        onTap: () =>
                             setState(() => _localPhotoPaths.remove(path)),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(Icons.close,
+                              size: 14, color: Colors.white),
+                        ),
                       ),
                     ),
                   ],
@@ -532,7 +602,7 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
           FilledButton.icon(
             onPressed: _saving ? null : _save,
             icon: const Icon(Icons.check),
-            label: const Text('Save entry'),
+            label: Text(widget.isEditing ? 'Update entry' : 'Save entry'),
           ),
         ],
       ),

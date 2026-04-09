@@ -172,7 +172,7 @@ class _NeighborhoodNewsComposeScreenState
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Posts stay visible for about 2 weeks. Be kind — content can be reported.',
+                      'Posts stay visible for about 30 days. Be kind — content can be reported.',
                       style: TextStyle(fontSize: 12, color: PawPartyColors.textHint),
                     ),
                     const SizedBox(height: 16),

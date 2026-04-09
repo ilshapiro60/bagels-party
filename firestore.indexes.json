@@ -89,6 +89,14 @@
         { "fieldPath": "meetupId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "partyAlbumPhotos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "meetupId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'app.dart';
 import 'config/firebase_bootstrap.dart';
 import 'config/stripe_config.dart';
@@ -10,6 +11,7 @@ import 'config/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await bootstrapFirebase();
+  MobileAds.instance.initialize();
 
   Stripe.publishableKey = StripeConfig.publishableKey;
   Stripe.merchantIdentifier = StripeConfig.appleMerchantId;

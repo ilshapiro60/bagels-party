@@ -62,6 +62,10 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
     }).toList();
   }
 
+  void _editEntry(PassportEntry entry) {
+    context.push('/add-passport-entry', extra: entry);
+  }
+
   Future<void> _confirmDeleteEntry(PassportEntry entry) async {
     final user = ref.read(authStateProvider).user;
     if (user == null) return;
@@ -119,25 +123,19 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text('${AppConstants.appName} Passport'),
-        actions: [
-          IconButton(
-            tooltip: 'Party stories',
-            icon: const Icon(Icons.photo_library_outlined),
-            onPressed: () => context.push('/party-stories'),
-          ),
-        ],
+        actions: const [],
       ),
       floatingActionButton: _tabController.index == 2
           ? null
-          : FloatingActionButton.extended(
+          : FloatingActionButton.small(
               onPressed: !isFirebaseInitialized
                   ? null
                   : () => context.push(
                         '/add-passport-entry',
                         extra: pet?.id,
                       ),
-              icon: const Icon(Icons.add),
-              label: const Text('Add entry'),
+              tooltip: 'Add entry',
+              child: const Icon(Icons.add),
             ),
       body: Column(
         children: [
@@ -362,6 +360,7 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
                   final entry = filtered[index];
                   return PassportEntryCard(
                     entry: entry,
+                    onEdit: () => _editEntry(entry),
                     onDelete: () => _confirmDeleteEntry(entry),
                   )
                       .animate()

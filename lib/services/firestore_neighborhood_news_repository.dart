@@ -13,7 +13,7 @@ class FirestoreNeighborhoodNewsRepository {
   /// Visible posts for the last [retentionDays].
   static Stream<List<NeighborhoodNewsPost>> watchPostsForArea({
     required String areaKey,
-    int retentionDays = 14,
+    int retentionDays = 30,
   }) {
     if (areaKey.isEmpty) {
       return Stream.value([]);

@@ -38,6 +38,9 @@
 			</array>
 		</dict>
 	</array>
+	<!-- AdMob App ID (test ID — replace with real ID before production) -->
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-3940256099942544~1458002511</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

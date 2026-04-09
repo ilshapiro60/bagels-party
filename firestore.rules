@@ -70,6 +70,21 @@ service cloud.firestore {
 
       allow update, delete: if request.auth != null
         && resource.data.ownerId == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if request.auth != null
+          && get(/databases/$(database)/documents/passportEntries/$(entryId)).data.isPublic == true;
+
+        allow create: if request.auth != null
+          && get(/databases/$(database)/documents/passportEntries/$(entryId)).data.isPublic == true
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 500;
+
+        allow delete: if request.auth != null
+          && resource.data.authorId == request.auth.uid;
+      }
     }
 
     match /partyInvites/{inviteId} {
@@ -233,6 +248,19 @@ service cloud.firestore {
           && request.resource.data.body.size() > 0
           && request.resource.data.body.size() <= 2000;
       }
+    }
+
+    // Shared party album: any signed-in user can view; uploader creates/deletes.
+    match /partyAlbumPhotos/{itemId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.uploaderId == request.auth.uid
+        && request.resource.data.meetupId is string
+        && request.resource.data.mediaUrl is string;
+
+      allow delete: if request.auth != null
+        && resource.data.uploaderId == request.auth.uid;
     }
 
     match /neighborhoodNewsReports/{reportId} {

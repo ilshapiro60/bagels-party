@@ -7,6 +7,7 @@ import '../../config/theme.dart';
 import '../../models/neighborhood_news.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firestore_neighborhood_news_repository.dart';
+import '../../widgets/newsletter_ad_widget.dart';
 import '../../widgets/paw_file_image.dart';
 
 class NeighborhoodNewsFeedScreen extends ConsumerStatefulWidget {
@@ -75,7 +76,7 @@ class _NeighborhoodNewsFeedScreenState
                                     Text(
                                       _filterCategoryId != null
                                           ? 'No ${NewsCategory.fromId(_filterCategoryId).label} posts yet.'
-                                          : 'No posts in the last 2 weeks.\nBe the first to share with neighbors!',
+                                          : 'No posts in the last 30 days.\nBe the first to share with neighbors!',
                                       textAlign: TextAlign.center,
                                       style: TextStyle(color: PawPartyColors.textSecondary),
                                     ),
@@ -84,12 +85,28 @@ class _NeighborhoodNewsFeedScreenState
                               ),
                             );
                           }
+                          final adCount = filtered.length >= 5
+                              ? filtered.length ~/ 5
+                              : 0;
+                          final totalCount = filtered.length + adCount;
+
                           return ListView.separated(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-                            itemCount: filtered.length,
+                            itemCount: totalCount,
                             separatorBuilder: (context, index) => const SizedBox(height: 10),
                             itemBuilder: (context, i) {
-                              final p = filtered[i];
+                              final adsBefore = i == 0 ? 0 : (i) ~/ 6;
+                              final isAd = i >= 5 && (i + 1) % 6 == 0;
+
+                              if (isAd) {
+                                return const NewsletterAdWidget();
+                              }
+
+                              final postIndex = i - adsBefore;
+                              if (postIndex >= filtered.length) {
+                                return const SizedBox.shrink();
+                              }
+                              final p = filtered[postIndex];
                               return _PostCard(
                                 post: p,
                                 dateFormat: df,
