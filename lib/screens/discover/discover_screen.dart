@@ -398,6 +398,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
     required Pet? primaryPet,
   }) {
     return ListView.builder(
+      key: ValueKey('pets_${_overrideLat}_${_overrideLng}_$_selectedFilter'),
       controller: _listScroll,
       padding: const EdgeInsets.only(bottom: 24),
       itemCount: visiblePets.length + 1,
