@@ -19,6 +19,7 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/stories/party_stories_screen.dart';
 import '../screens/stories/add_story_screen.dart';
 import '../screens/pet/pet_detail_screen.dart';
+import '../screens/chat/chat_screen.dart';
 import '../screens/friends/friends_screen.dart';
 import '../screens/meetup/invite_friends_screen.dart';
 import '../screens/meetup/manage_party_guests_screen.dart';
@@ -139,6 +140,12 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/friends',
       builder: (context, state) => const FriendsScreen(),
+    ),
+    GoRoute(
+      path: '/chat/:friendUid',
+      builder: (context, state) => ChatScreen(
+        friendUid: state.pathParameters['friendUid']!,
+      ),
     ),
     GoRoute(
       path: '/invite-friends/:meetupId',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:geocoding/geocoding.dart' as geo;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../config/theme.dart';
@@ -35,6 +36,11 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
   late final TabController _tabController;
   final TextEditingController _vetSearchController = TextEditingController();
 
+  /// Custom location override (null = use profile GPS).
+  double? _overrideLat;
+  double? _overrideLng;
+  String? _overrideLabel;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +53,51 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
     _vetSearchController.dispose();
     _listScroll.dispose();
     super.dispose();
+  }
+
+  UserProfile? _effectiveUser(UserProfile? real) {
+    if (_overrideLat == null || _overrideLng == null || real == null) return real;
+    return real.copyWith(latitude: _overrideLat, longitude: _overrideLng);
+  }
+
+  String _locationLabel(UserProfile? user) {
+    if (_overrideLabel != null) return _overrideLabel!;
+    return user?.neighborhood ?? 'Your area';
+  }
+
+  Future<void> _searchLocation(String query) async {
+    if (query.trim().isEmpty) return;
+    try {
+      final locations = await geo.locationFromAddress(query.trim());
+      if (locations.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No results found for that address.')),
+          );
+        }
+        return;
+      }
+      final loc = locations.first;
+      setState(() {
+        _overrideLat = loc.latitude;
+        _overrideLng = loc.longitude;
+        _overrideLabel = query.trim();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not find location: $e')),
+        );
+      }
+    }
+  }
+
+  void _resetToCurrentLocation() {
+    setState(() {
+      _overrideLat = null;
+      _overrideLng = null;
+      _overrideLabel = null;
+    });
   }
 
   void _openPetProfileFromMap(Pet pet) {
@@ -170,6 +221,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
     final nearbyPets = ref.watch(nearbyPetsProvider);
     final userPets = ref.watch(userPetsProvider);
     final authState = ref.watch(authStateProvider);
+    final effectiveUser = _effectiveUser(authState.user);
     final primaryPet = userPets.isNotEmpty ? userPets.first : null;
 
     final typeFiltered = _selectedFilter == 'All'
@@ -178,12 +230,12 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
 
     final visiblePets = petsWithinRadiusMiles(
       typeFiltered,
-      authState.user,
+      effectiveUser,
       _radiusMiles,
     );
 
-    final viewerPoint = discoverMapAnchor(authState.user, visiblePets);
-    final showViewerOnMap = profileHasMapCoordinates(authState.user);
+    final viewerPoint = discoverMapAnchor(effectiveUser, visiblePets);
+    final showViewerOnMap = profileHasMapCoordinates(effectiveUser);
 
     return Scaffold(
       appBar: AppBar(
@@ -201,6 +253,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
             tooltip: 'Refresh my location',
             icon: const Icon(Icons.my_location),
             onPressed: () async {
+              _resetToCurrentLocation();
               final ok =
                   await ref.read(authStateProvider.notifier).syncDeviceLocation();
               if (!context.mounted) return;
@@ -217,28 +270,118 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
           ),
         ],
       ),
-      // Only one tab's subtree at a time: two GoogleMap instances in a TabBarView
-      // often crash on iOS (platform view / Maps SDK). Swipe-between-tabs is omitted.
-      body: AnimatedBuilder(
-        animation: _tabController,
-        builder: (context, _) {
-          switch (_tabController.index) {
-            case 0:
-              return _buildPetsDiscoverTab(
-                visiblePets: visiblePets,
-                viewerPoint: viewerPoint,
-                viewerProfile: authState.user,
-                showViewerOnMap: showViewerOnMap,
-                primaryPet: primaryPet,
-              );
-            case 1:
-              return _buildVetClinicsTab(authState.user, showViewerOnMap);
-            case 2:
-              return _buildEventsTab(authState.user);
-            default:
-              return const SizedBox.shrink();
-          }
-        },
+      body: Column(
+        children: [
+          _buildLocationBar(authState.user),
+          Expanded(
+            child: AnimatedBuilder(
+              animation: _tabController,
+              builder: (context, _) {
+                switch (_tabController.index) {
+                  case 0:
+                    return _buildPetsDiscoverTab(
+                      visiblePets: visiblePets,
+                      viewerPoint: viewerPoint,
+                      viewerProfile: effectiveUser,
+                      showViewerOnMap: showViewerOnMap,
+                      primaryPet: primaryPet,
+                    );
+                  case 1:
+                    return _buildVetClinicsTab(effectiveUser, showViewerOnMap);
+                  case 2:
+                    return _buildEventsTab(effectiveUser);
+                  default:
+                    return const SizedBox.shrink();
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationBar(UserProfile? user) {
+    final label = _locationLabel(user);
+    final isOverride = _overrideLabel != null;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      color: PawPartyColors.surface,
+      child: Row(
+        children: [
+          Icon(
+            isOverride ? Icons.search : Icons.location_on,
+            size: 18,
+            color: isOverride ? PawPartyColors.secondary : PawPartyColors.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showLocationSearchDialog(),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: PawPartyColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          if (isOverride)
+            IconButton(
+              icon: Icon(Icons.close, size: 18, color: PawPartyColors.textHint),
+              tooltip: 'Back to my location',
+              onPressed: _resetToCurrentLocation,
+              visualDensity: VisualDensity.compact,
+            ),
+          IconButton(
+            icon: Icon(Icons.edit_location_alt_outlined,
+                size: 18, color: PawPartyColors.textSecondary),
+            tooltip: 'Search another location',
+            onPressed: () => _showLocationSearchDialog(),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLocationSearchDialog() {
+    final controller = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Search location'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            hintText: 'Address, city, or zip code',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (v) {
+            Navigator.pop(ctx);
+            _searchLocation(v);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _searchLocation(controller.text);
+            },
+            child: const Text('Search'),
+          ),
+        ],
       ),
     );
   }

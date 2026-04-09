@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 
 import '../models/user_profile.dart';
 import 'firebase_user_mapper.dart';
+import 'firestore_message_repository.dart';
 import 'firestore_pet_repository.dart';
 
 class FirestoreProfileRepository {
@@ -162,5 +163,24 @@ class FirestoreProfileRepository {
       {'friendUids': FieldValue.arrayUnion(others.toList())},
       SetOptions(merge: true),
     );
+  }
+
+  /// Broadcast a shout message to all friends via DMs.
+  static Future<void> broadcastShout({
+    required String fromUid,
+    required String fromName,
+    required List<String> friendUids,
+    required String message,
+  }) async {
+    for (final friendUid in friendUids) {
+      final convId =
+          await FirestoreMessageRepository.ensureConversation(fromUid, friendUid);
+      await FirestoreMessageRepository.sendMessage(
+        conversationId: convId,
+        fromUid: fromUid,
+        body: message,
+        isShout: true,
+      );
+    }
   }
 }

@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../config/firebase_bootstrap.dart';
 import '../../config/theme.dart';
 import '../../models/meetup.dart';
 import '../../models/party_invite.dart';
 import '../../models/pet.dart';
+import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_meetup_repository.dart';
 import '../../services/firestore_passport_repository.dart';
 import '../../services/firestore_profile_repository.dart';
+import '../../services/approximate_location.dart';
 import '../../utils/pet_compatibility.dart';
 import '../../widgets/pet_card.dart';
 import '../../widgets/meetup_card.dart';
@@ -43,6 +46,9 @@ class HomeScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: _buildQuickActions(context),
             ),
+            SliverToBoxAdapter(
+              child: _buildFriendsSection(context, ref, authState.user),
+            ),
             if (pendingInvites.isNotEmpty) ...[
               SliverToBoxAdapter(
                 child: _buildSectionHeader(context, 'Party Invitations', Icons.mail),
@@ -57,13 +63,16 @@ class HomeScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: _buildAreaNewsletterCard(context),
             ),
+            SliverToBoxAdapter(
+              child: _buildNearbyEventsPreview(context, ref, authState.user),
+            ),
             if (meetups.isNotEmpty) ...[
               SliverToBoxAdapter(
-                child: _buildSectionHeader(context, 'Upcoming parties', Icons.celebration),
+                child: _buildSectionHeader(context, 'Your parties', Icons.celebration),
               ),
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 248,
+                  height: 280,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -189,16 +198,6 @@ class HomeScreen extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 20, 24, 8),
       child: Row(
         children: [
-          IconButton.filledTonal(
-            onPressed: () => context.push('/friends'),
-            icon: const Icon(Icons.people_outline),
-            tooltip: 'Friends',
-            style: IconButton.styleFrom(
-              foregroundColor: PawPartyColors.primary,
-              backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
-            ),
-          ),
-          const SizedBox(width: 4),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,47 +283,169 @@ class HomeScreen extends ConsumerWidget {
     ).animate().fadeIn(delay: 200.ms, duration: 500.ms);
   }
 
+  Widget _buildFriendsSection(
+    BuildContext context,
+    WidgetRef ref,
+    UserProfile? user,
+  ) {
+    final friendUids = user?.friendUids ?? [];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('Friends', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              if (user != null)
+                TextButton(
+                  onPressed: () => _showShoutDialog(context, ref, user),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: const TextStyle(fontSize: 13),
+                  ),
+                  child: const Text('Shout'),
+                ),
+              TextButton(
+                onPressed: () => context.push('/friends'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  textStyle: const TextStyle(fontSize: 13),
+                ),
+                child: const Text('Manage'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (friendUids.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: PawPartyColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.people_outline, size: 24, color: PawPartyColors.textHint),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'No friends yet — discover pets nearby to connect.',
+                      style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => context.go('/discover'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    child: const Text('Discover'),
+                  ),
+                ],
+              ),
+            )
+          else
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: friendUids.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) {
+                  return _FriendChip(uid: friendUids[i]);
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNearbyEventsPreview(
+    BuildContext context,
+    WidgetRef ref,
+    UserProfile? user,
+  ) {
+    final eventsAsync = ref.watch(publicMeetupsProvider);
+    return eventsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (events) {
+        final nearby = events.where((m) {
+          if (user?.latitude == null || user?.longitude == null) return true;
+          final d = haversineMeters(
+            GeoPoint(user!.latitude!, user.longitude!),
+            GeoPoint(m.latitude, m.longitude),
+          );
+          return d <= 5 * 1609.34;
+        }).toList();
+
+        if (nearby.isEmpty) return const SizedBox.shrink();
+
+        final preview = nearby.take(3).toList();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text('Events nearby', style: Theme.of(context).textTheme.titleMedium),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => context.go('/discover'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
+                    child: Text('See all (${nearby.length})'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              ...preview.map((m) => _NearbyEventTile(meetup: m, user: user)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildPartyStoriesCard(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
       child: Material(
         color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           onTap: () => context.push('/party-stories'),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: PawPartyColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.celebration, color: PawPartyColors.primary),
-                ),
-                const SizedBox(width: 14),
+                Icon(Icons.celebration, size: 20, color: PawPartyColors.primary),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Party stories',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        'Photos & videos from meetups',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: PawPartyColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Party stories',
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
                 ),
-                Icon(Icons.chevron_right, color: PawPartyColors.textHint),
+                Text(
+                  'Photos & videos',
+                  style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 18, color: PawPartyColors.textHint),
               ],
             ),
           ),
@@ -335,45 +456,31 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildAreaNewsletterCard(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
       child: Material(
         color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           onTap: () => context.push('/neighborhood-news'),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: PawPartyColors.secondary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(Icons.forum_outlined, color: PawPartyColors.secondary),
-                ),
-                const SizedBox(width: 14),
+                Icon(Icons.forum_outlined, size: 20, color: PawPartyColors.secondary),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Area newsletter',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        'Posts from neighbors in your area (2-week feed)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: PawPartyColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    'Area newsletter',
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
                 ),
-                Icon(Icons.chevron_right, color: PawPartyColors.textHint),
+                Text(
+                  '2-week feed',
+                  style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 18, color: PawPartyColors.textHint),
               ],
             ),
           ),
@@ -720,6 +827,247 @@ class _PartyInviteCardState extends ConsumerState<_PartyInviteCard> {
         ),
       ),
     );
+  }
+}
+
+class _NearbyEventTile extends StatelessWidget {
+  const _NearbyEventTile({required this.meetup, required this.user});
+
+  final Meetup meetup;
+  final UserProfile? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = DateFormat('EEE, MMM d · h:mm a').format(meetup.dateTime);
+    final distLabel = _distanceLabel();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: PawPartyColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => context.go('/discover'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: PawPartyColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      DateFormat('d').format(meetup.dateTime),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: PawPartyColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        meetup.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$dateStr${distLabel.isNotEmpty ? ' · $distLabel' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                if (meetup.hostName.isNotEmpty)
+                  Text(
+                    meetup.hostName.split(' ').first,
+                    style: TextStyle(fontSize: 11, color: PawPartyColors.textHint),
+                  ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 16, color: PawPartyColors.textHint),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _distanceLabel() {
+    if (user?.latitude == null || user?.longitude == null) return '';
+    final meters = haversineMeters(
+      GeoPoint(user!.latitude!, user!.longitude!),
+      GeoPoint(meetup.latitude, meetup.longitude),
+    );
+    final miles = meters / 1609.34;
+    if (miles < 0.3) return 'Nearby';
+    return '${miles.toStringAsFixed(1)} mi';
+  }
+}
+
+class _FriendChip extends ConsumerWidget {
+  const _FriendChip({required this.uid});
+
+  final String uid;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(ownerProfileProvider(uid));
+    return async.when(
+      data: (p) => GestureDetector(
+        onTap: () => context.push('/chat/$uid'),
+        child: SizedBox(
+          width: 56,
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
+                child: p.photoUrl != null && p.photoUrl!.isNotEmpty
+                    ? ClipOval(
+                        child: PawFileOrNetworkImage(
+                          path: p.photoUrl!,
+                          width: 44,
+                          height: 44,
+                        ),
+                      )
+                    : Text(
+                        p.displayName.isNotEmpty ? p.displayName[0] : '?',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: PawPartyColors.primary,
+                        ),
+                      ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                p.displayName.split(' ').first,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+      loading: () => const SizedBox(
+        width: 56,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (_, _) => const SizedBox(width: 56),
+    );
+  }
+}
+
+void _showShoutDialog(BuildContext context, WidgetRef ref, UserProfile user) {
+  final controller = TextEditingController();
+  final presets = [
+    'Walking my dog at the park — come join us!',
+    'At the dog park right now, stop by!',
+    'Anyone up for a walk this evening?',
+  ];
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Shout to friends'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Send a quick message to all your friends.',
+              style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 3,
+              maxLength: 200,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                hintText: 'e.g., Walking my dog at 7 AM — join me!',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: presets
+                  .map(
+                    (p) => ActionChip(
+                      label: Text(p, style: const TextStyle(fontSize: 11)),
+                      onPressed: () => controller.text = p,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () async {
+            final text = controller.text.trim();
+            if (text.isEmpty) return;
+            Navigator.pop(ctx);
+            await _sendShout(context, ref, user, text);
+          },
+          icon: const Icon(Icons.campaign, size: 18),
+          label: const Text('Send'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _sendShout(
+  BuildContext context,
+  WidgetRef ref,
+  UserProfile user,
+  String message,
+) async {
+  try {
+    await FirestoreProfileRepository.broadcastShout(
+      fromUid: user.id,
+      fromName: user.displayName,
+      friendUids: user.friendUids,
+      message: message,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Shout sent to your friends!')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not send shout: $e')),
+      );
+    }
   }
 }
 

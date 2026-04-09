@@ -209,6 +209,32 @@ service cloud.firestore {
         && resource.data.authorId == request.auth.uid;
     }
 
+    // Direct messaging: only participants can read/write their conversation.
+    match /conversations/{conversationId} {
+      allow read: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+
+      allow create: if request.auth != null
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2;
+
+      allow update: if request.auth != null
+        && request.auth.uid in resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+
+        allow create: if request.auth != null
+          && request.resource.data.fromUid == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 2000;
+      }
+    }
+
     match /neighborhoodNewsReports/{reportId} {
       allow create: if request.auth != null
         && request.resource.data.reporterId == request.auth.uid

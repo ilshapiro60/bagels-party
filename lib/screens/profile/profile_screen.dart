@@ -7,6 +7,8 @@ import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
+import '../../services/firebase_storage_service.dart';
+import '../../utils/media_picker_utils.dart';
 import '../../widgets/owner_media_strip.dart';
 import '../../widgets/paw_file_image.dart';
 
@@ -65,25 +67,45 @@ class ProfileScreen extends ConsumerWidget {
   ) {
     return Column(
       children: [
-        CircleAvatar(
-          radius: 50,
-          backgroundColor: PawPartyColors.primary.withValues(alpha: 0.15),
-          child: user.photoUrl != null && user.photoUrl!.isNotEmpty
-              ? ClipOval(
-                  child: PawFileOrNetworkImage(
-                    path: user.photoUrl!,
-                    width: 100,
-                    height: 100,
-                  ),
-                )
-              : Text(
-                  user.displayName[0].toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
+        GestureDetector(
+          onTap: () => _pickProfilePhoto(context, ref, user),
+          child: Stack(
+            children: [
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: PawPartyColors.primary.withValues(alpha: 0.15),
+                child: user.photoUrl != null && user.photoUrl!.isNotEmpty
+                    ? ClipOval(
+                        child: PawFileOrNetworkImage(
+                          path: user.photoUrl!,
+                          width: 100,
+                          height: 100,
+                        ),
+                      )
+                    : Text(
+                        user.displayName[0].toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                          color: PawPartyColors.primary,
+                        ),
+                      ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
                     color: PawPartyColors.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
                   ),
+                  child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
                 ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         Text(
@@ -134,7 +156,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   const SizedBox(height: 4),
                   Text(
-                    'Tap to edit',
+                    'Edit Bio',
                     style: TextStyle(
                       fontSize: 12,
                       color: PawPartyColors.primary,
@@ -471,6 +493,48 @@ class ProfileScreen extends ConsumerWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
+}
+
+Future<void> _pickProfilePhoto(
+  BuildContext context,
+  WidgetRef ref,
+  UserProfile user,
+) async {
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.photo_library),
+            title: const Text('Choose from gallery'),
+            onTap: () => Navigator.pop(ctx, 'gallery'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.camera_alt),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(ctx, 'camera'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (!context.mounted || choice == null) return;
+
+  final path = choice == 'camera'
+      ? await pickPhotoFromCamera()
+      : await pickPhotoFromGallery();
+  if (path == null || !context.mounted) return;
+
+  final uploaded =
+      await FirebaseStorageService.instance.uploadProfileAvatar(path);
+  ref.read(authStateProvider.notifier).updateUser(
+        user.copyWithProfile(photoUrl: uploaded),
+      );
 }
 
 void _openNotificationSettings(BuildContext context) {

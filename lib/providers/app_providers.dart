@@ -24,7 +24,9 @@ import '../services/approximate_location.dart';
 import '../services/auth_persistence.dart';
 import '../services/device_location_service.dart';
 import '../services/firebase_user_mapper.dart';
+import '../models/direct_message.dart';
 import '../services/firestore_meetup_repository.dart';
+import '../services/firestore_message_repository.dart';
 import '../services/firestore_story_repository.dart';
 import '../services/firestore_passport_repository.dart';
 import '../services/firestore_pet_buddy_repository.dart';
@@ -766,4 +768,18 @@ final myPartyStoriesProvider =
 final communityStoriesProvider = StreamProvider<List<PartyStory>>((ref) {
   if (!isFirebaseInitialized) return Stream.value([]);
   return FirestoreStoryRepository.watchCommunityStories();
+});
+
+/// All conversations for the current user (inbox).
+final conversationsProvider = StreamProvider<List<Conversation>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) return Stream.value([]);
+  return FirestoreMessageRepository.watchConversations(uid);
+});
+
+/// Messages for a specific conversation (chat screen).
+final messagesProvider =
+    StreamProvider.family<List<DirectMessage>, String>((ref, conversationId) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreMessageRepository.watchMessages(conversationId);
 });

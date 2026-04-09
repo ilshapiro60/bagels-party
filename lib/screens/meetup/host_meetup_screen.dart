@@ -306,12 +306,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
               ],
             ),
           ),
-          Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            child: _buildBottomButton(),
-          ),
+          _buildBottomButton(),
         ],
       ),
     ),
@@ -704,14 +699,14 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
         isLastStep ? pizzaComplete && !_creating : !_creating;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
       decoration: BoxDecoration(
         color: PawPartyColors.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -4),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
@@ -720,7 +715,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
         children: [
           if (isLastStep && !pizzaComplete)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 6),
               child: Text(
                 'All four commitments are required to host',
                 style: TextStyle(fontSize: 12, color: PawPartyColors.error),
@@ -728,18 +723,19 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
             ),
           SizedBox(
             width: double.infinity,
-            height: 56,
+            height: 44,
             child: ElevatedButton(
               onPressed: canProceed
                   ? (isLastStep ? _onCreatePressed : _nextStep)
                   : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: isLastStep ? PawPartyColors.success : PawPartyColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 0),
               ),
               child: _creating && isLastStep
                   ? const SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         color: Colors.white,
