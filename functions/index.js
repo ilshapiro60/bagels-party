@@ -1,7 +1,11 @@
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 
 initializeApp();
 
@@ -231,5 +235,57 @@ exports.onPartyInviteUpdated = onDocumentUpdated(
         },
       );
     }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 6. Stripe – create a PaymentIntent for party hosting fees
+// ---------------------------------------------------------------------------
+const VALID_PRODUCTS = {
+  party_host_regular: 399,
+  party_host_biz_small: 999,
+  party_host_biz_medium: 1999,
+  party_host_biz_large: 2999,
+};
+
+exports.createPaymentIntent = onCall(
+  { secrets: [stripeSecretKey] },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in to continue.");
+    }
+
+    const { productId } = request.data;
+    const amount = VALID_PRODUCTS[productId];
+    if (!amount) {
+      throw new HttpsError("invalid-argument", `Unknown product: ${productId}`);
+    }
+
+    const stripe = require("stripe")(stripeSecretKey.value());
+
+    const customer = await stripe.customers.create({
+      metadata: { firebaseUid: request.auth.uid },
+    });
+
+    const ephemeralKey = await stripe.ephemeralKeys.create(
+      { customer: customer.id },
+      { apiVersion: "2024-12-18.acacia" },
+    );
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: "usd",
+      customer: customer.id,
+      metadata: {
+        firebaseUid: request.auth.uid,
+        productId,
+      },
+    });
+
+    return {
+      clientSecret: paymentIntent.client_secret,
+      ephemeralKey: ephemeralKey.secret,
+      customerId: customer.id,
+    };
   },
 );

@@ -472,8 +472,6 @@ extension UserProfileCopyWith on UserProfile {
       attendCount: attendCount,
       hostRating: hostRating,
       guestRating: guestRating,
-      isHostPassActive: isHostPassActive,
-      hostPassExpiry: hostPassExpiry,
       createdAt: createdAt,
       bio: bio ?? this.bio,
     );

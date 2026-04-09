@@ -3,7 +3,14 @@ class AppConstants {
   static const String appTagline = 'Where Paws Meet Pizza';
   static const double defaultRadius = 5.0; // miles
   static const int maxFreeHostings = 3;
-  static const double hostPassPrice = 4.99;
+
+  // Per-party hosting fees
+  static const double partyFeeRegular = 3.99;
+  static const double partyFeeBizSmall = 9.99;
+  static const double partyFeeBizMedium = 19.99;
+  static const double partyFeeBizLarge = 29.99;
+  static const int bizSmallGuestMax = 20;
+  static const int bizMediumGuestMax = 50;
   static const int maxPetsPerHousehold = 5;
   static const int passportFreeEntries = 10;
 

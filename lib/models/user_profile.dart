@@ -1,3 +1,5 @@
+import '../config/constants.dart';
+
 class UserProfile {
   final String id;
   final String email;
@@ -20,8 +22,6 @@ class UserProfile {
   final int attendCount;
   final double hostRating;
   final double guestRating;
-  final bool isHostPassActive;
-  final DateTime? hostPassExpiry;
   final DateTime createdAt;
   final String? bio;
 
@@ -50,8 +50,6 @@ class UserProfile {
     this.attendCount = 0,
     this.hostRating = 0.0,
     this.guestRating = 0.0,
-    this.isHostPassActive = false,
-    this.hostPassExpiry,
     required this.createdAt,
     this.bio,
     this.isBusinessAccount = false,
@@ -69,8 +67,7 @@ class UserProfile {
     return normalizeAreaKey(neighborhood);
   }
 
-  bool get canHostFree => hostCount < 3;
-  bool get canHost => canHostFree || isHostPassActive || isBusinessAccount;
+  bool get canHostFree => hostCount < AppConstants.maxFreeHostings;
 
   /// Display name for event cards -- prefers businessName for business accounts.
   String get eventHostDisplayName =>
@@ -98,8 +95,6 @@ class UserProfile {
       'attendCount': attendCount,
       'hostRating': hostRating,
       'guestRating': guestRating,
-      'isHostPassActive': isHostPassActive,
-      'hostPassExpiry': hostPassExpiry?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'bio': bio,
       'isBusinessAccount': isBusinessAccount,
@@ -134,10 +129,6 @@ class UserProfile {
       attendCount: map['attendCount'] as int? ?? 0,
       hostRating: (map['hostRating'] as num?)?.toDouble() ?? 0.0,
       guestRating: (map['guestRating'] as num?)?.toDouble() ?? 0.0,
-      isHostPassActive: map['isHostPassActive'] as bool? ?? false,
-      hostPassExpiry: map['hostPassExpiry'] != null
-          ? DateTime.parse(map['hostPassExpiry'] as String)
-          : null,
       createdAt: DateTime.parse(map['createdAt'] as String),
       bio: map['bio'] as String?,
       isBusinessAccount: map['isBusinessAccount'] as bool? ?? false,
@@ -172,8 +163,6 @@ class UserProfile {
       attendCount: attendCount,
       hostRating: hostRating,
       guestRating: guestRating,
-      isHostPassActive: isHostPassActive,
-      hostPassExpiry: hostPassExpiry,
       createdAt: createdAt,
       bio: bio,
       isBusinessAccount: isBusinessAccount,
@@ -203,8 +192,6 @@ class UserProfile {
       attendCount: attendCount,
       hostRating: hostRating,
       guestRating: guestRating,
-      isHostPassActive: isHostPassActive,
-      hostPassExpiry: hostPassExpiry,
       createdAt: createdAt,
       bio: bio,
       isBusinessAccount: isBusinessAccount,
@@ -247,8 +234,6 @@ class UserProfile {
       attendCount: attendCount,
       hostRating: hostRating,
       guestRating: guestRating,
-      isHostPassActive: isHostPassActive,
-      hostPassExpiry: hostPassExpiry,
       createdAt: createdAt,
       bio: updateBio
           ? (bio == null || bio.isEmpty ? null : bio)
@@ -286,8 +271,6 @@ class UserProfile {
       attendCount: attendCount,
       hostRating: hostRating,
       guestRating: guestRating,
-      isHostPassActive: isHostPassActive,
-      hostPassExpiry: hostPassExpiry,
       createdAt: createdAt,
       bio: bio,
       isBusinessAccount: isBusinessAccount,

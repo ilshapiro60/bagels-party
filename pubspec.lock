@@ -145,6 +145,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.2.0"
+  cloud_functions:
+    dependency: "direct main"
+    description:
+      name: cloud_functions
+      sha256: "506ee80e68a7c67679150f79f00faa47da96698d8deb57a4f0844ae556c07b1e"
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.1.0"
+  cloud_functions_platform_interface:
+    dependency: transitive
+    description:
+      name: cloud_functions_platform_interface
+      sha256: "1b215fccef28a8f9ebe0866c9455081c98cc9f699709e15192b64e493937827c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.8.11"
+  cloud_functions_web:
+    dependency: transitive
+    description:
+      name: cloud_functions_web
+      sha256: "04d97196681b36ea0bb195be4afafb623227bc6704ce7ec9c0a3e1ee96c8c55c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.1.4"
   code_assets:
     dependency: transitive
     description:
@@ -486,6 +510,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.3"
+  flutter_stripe:
+    dependency: "direct main"
+    description:
+      name: flutter_stripe
+      sha256: "7cbb56d41811f03bc5541ee330917db0bda0e8e98aabe9812faa977be550a621"
+      url: "https://pub.dev"
+    source: hosted
+    version: "12.5.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -1333,6 +1365,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  stripe_android:
+    dependency: transitive
+    description:
+      name: stripe_android
+      sha256: c29e7a362445c24d8932bca06a4ef7ec5521006ccd2150329a930d46eeada54b
+      url: "https://pub.dev"
+    source: hosted
+    version: "12.5.0"
+  stripe_ios:
+    dependency: transitive
+    description:
+      name: stripe_ios
+      sha256: e3eb98c3083b66973d2cd129fe3efd821a3a3ea5e10008ea7b09865e6445f21f
+      url: "https://pub.dev"
+    source: hosted
+    version: "12.5.0"
+  stripe_platform_interface:
+    dependency: transitive
+    description:
+      name: stripe_platform_interface
+      sha256: "40dd9d6cc45db33d368f6c93ef9dc35ea1d40fe4b9e6d3ffc1fbc97d569ec85d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "12.5.0"
   synchronized:
     dependency: transitive
     description:

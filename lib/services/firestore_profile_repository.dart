@@ -25,18 +25,12 @@ class FirestoreProfileRepository {
     final m = Map<String, dynamic>.from(snap.data() ?? {});
     m['id'] = snap.id;
     m['createdAt'] = _iso(m['createdAt']);
-    if (m['hostPassExpiry'] != null) {
-      m['hostPassExpiry'] = _iso(m['hostPassExpiry']);
-    }
     return UserProfile.fromMap(m);
   }
 
   static Map<String, dynamic> profileToFirestore(UserProfile u) {
     final m = u.toMap();
     m['createdAt'] = Timestamp.fromDate(u.createdAt);
-    if (u.hostPassExpiry != null) {
-      m['hostPassExpiry'] = Timestamp.fromDate(u.hostPassExpiry!);
-    }
     m['neighborhoodKey'] = UserProfile.normalizeAreaKey(u.neighborhood);
     m['isModerator'] = u.isModerator;
     return m;
@@ -87,8 +81,6 @@ class FirestoreProfileRepository {
       attendCount: u.attendCount,
       hostRating: u.hostRating,
       guestRating: u.guestRating,
-      isHostPassActive: u.isHostPassActive,
-      hostPassExpiry: u.hostPassExpiry,
       createdAt: u.createdAt,
       bio: u.bio,
     );

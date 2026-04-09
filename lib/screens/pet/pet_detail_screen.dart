@@ -78,6 +78,17 @@ class PetDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back_ios_new),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          if (isMine)
+            PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'delete') _confirmDeletePet(context, ref, pet);
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'delete', child: Text('Delete pet')),
+              ],
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -279,52 +290,64 @@ class _PetProfileHeaderState extends ConsumerState<_PetProfileHeader> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: hasPhoto
-                      ? PawFileOrNetworkImage(
-                          path: pet.photoUrl!,
-                          width: 100,
-                          height: 100,
-                        )
-                      : Container(
-                          width: 100,
-                          height: 100,
-                          color: PawPartyColors.surfaceVariant,
-                          child: Icon(Icons.pets, size: 48, color: PawPartyColors.primary),
-                        ),
-                ),
-                if (widget.isMine)
-                  Positioned(
-                    right: -6,
-                    bottom: -6,
-                    child: Material(
-                      elevation: 2,
-                      color: PawPartyColors.primary,
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _busy ? null : _setProfilePhoto,
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: _busy
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.camera_alt, color: Colors.white, size: 20),
-                        ),
-                      ),
-                    ),
+            GestureDetector(
+              onTap: widget.isMine && !_busy ? _setProfilePhoto : null,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: hasPhoto
+                        ? PawFileOrNetworkImage(
+                            path: pet.photoUrl!,
+                            width: 100,
+                            height: 100,
+                          )
+                        : Container(
+                            width: 100,
+                            height: 100,
+                            color: PawPartyColors.surfaceVariant,
+                            child: Icon(Icons.pets, size: 48, color: PawPartyColors.primary),
+                          ),
                   ),
-              ],
+                  if (widget.isMine)
+                    Positioned(
+                      right: -6,
+                      bottom: -6,
+                      child: _busy
+                          ? Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: PawPartyColors.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: PawPartyColors.primary,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.15),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                            ),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -344,16 +367,6 @@ class _PetProfileHeaderState extends ConsumerState<_PetProfileHeader> {
                     pet.size,
                     style: TextStyle(color: PawPartyColors.textHint, fontSize: 13),
                   ),
-                  if (widget.isMine) ...[
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: _busy ? null : _setProfilePhoto,
-                      icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-                      label: Text(
-                        hasPhoto ? 'Change profile photo' : 'Add profile photo',
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -497,6 +510,47 @@ class _OwnerCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> _confirmDeletePet(
+  BuildContext context,
+  WidgetRef ref,
+  Pet pet,
+) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete pet?'),
+      content: Text(
+        'This will permanently remove ${pet.name} from your profile. '
+        'This cannot be undone.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: PawPartyColors.error),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  try {
+    await ref.read(userPetsProvider.notifier).removePet(pet.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${pet.name} has been removed.')),
+      );
+      context.pop();
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete: ${_firebaseErrorSnackText(e)}')),
+      );
+    }
   }
 }
 

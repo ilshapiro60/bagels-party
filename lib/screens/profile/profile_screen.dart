@@ -44,7 +44,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 20),
             _buildStatsRow(context, user),
             const SizedBox(height: 24),
-            _buildHostPassCard(context, user),
+            _buildHostingPricingCard(context, user),
             const SizedBox(height: 24),
             _buildSection(
               context,
@@ -219,43 +219,39 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildHostPassCard(BuildContext context, user) {
-    if (user.isHostPassActive) {
+  Widget _buildHostingPricingCard(BuildContext context, user) {
+    if (user.isBusinessAccount) {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [PawPartyColors.pizzaGold, PawPartyColors.primary],
-          ),
+          color: PawPartyColors.surfaceVariant,
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: PawPartyColors.divider),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.workspace_premium, size: 40, color: Colors.white),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Host Pass Active',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+            Row(
+              children: [
+                Icon(Icons.storefront, size: 28, color: PawPartyColors.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Business event pricing',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Unlimited hosting, full analytics',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.85),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+            _pricingRow('\$${AppConstants.partyFeeBizSmall.toStringAsFixed(2)}',
+                'Up to ${AppConstants.bizSmallGuestMax} guests'),
+            const SizedBox(height: 6),
+            _pricingRow('\$${AppConstants.partyFeeBizMedium.toStringAsFixed(2)}',
+                '${AppConstants.bizSmallGuestMax + 1}–${AppConstants.bizMediumGuestMax} guests'),
+            const SizedBox(height: 6),
+            _pricingRow('\$${AppConstants.partyFeeBizLarge.toStringAsFixed(2)}',
+                '${AppConstants.bizMediumGuestMax + 1}+ guests'),
           ],
         ),
       );
@@ -269,50 +265,63 @@ class ProfileScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: PawPartyColors.divider),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.local_pizza, size: 32, color: PawPartyColors.pizzaGold),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      freeLeft > 0
-                          ? '$freeLeft free parties left'
-                          : 'Upgrade to Host Pass',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '\$${AppConstants.hostPassPrice}/mo for unlimited hosting',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: PawPartyColors.textSecondary,
-                      ),
-                    ),
-                  ],
+          Icon(Icons.local_pizza, size: 32, color: PawPartyColors.pizzaGold),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  freeLeft > 0
+                      ? '$freeLeft free ${freeLeft == 1 ? 'party' : 'parties'} remaining'
+                      : '\$${AppConstants.partyFeeRegular.toStringAsFixed(2)} per party',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-            ],
-          ),
-          if (freeLeft <= 0) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: PawPartyColors.pizzaGold,
+                const SizedBox(height: 2),
+                Text(
+                  freeLeft > 0
+                      ? 'Then \$${AppConstants.partyFeeRegular.toStringAsFixed(2)} per party'
+                      : 'First ${AppConstants.maxFreeHostings} were free',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: PawPartyColors.textSecondary,
+                  ),
                 ),
-                child: const Text('Get Host Pass'),
-              ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _pricingRow(String price, String description) {
+    return Row(
+      children: [
+        const SizedBox(width: 40),
+        SizedBox(
+          width: 56,
+          child: Text(
+            price,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: PawPartyColors.textPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            description,
+            style: TextStyle(
+              fontSize: 13,
+              color: PawPartyColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

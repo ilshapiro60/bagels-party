@@ -206,7 +206,7 @@ class HomeScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Hey $name! 👋',
+                  name,
                   style: Theme.of(context).textTheme.displayMedium,
                 ),
                 const SizedBox(height: 4),

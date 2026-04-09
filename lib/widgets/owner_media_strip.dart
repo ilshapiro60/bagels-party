@@ -1,8 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
-
 import '../config/theme.dart';
 import '../providers/app_providers.dart';
 import '../services/firebase_storage_service.dart';
@@ -29,82 +27,6 @@ class OwnerMediaStrip extends ConsumerStatefulWidget {
 }
 
 class _OwnerMediaStripState extends ConsumerState<OwnerMediaStrip> {
-  Future<void> _setProfilePhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Gallery'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Camera'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || source == null) return;
-    final path = source == ImageSource.gallery
-        ? await pickPhotoFromGallery()
-        : await pickPhotoFromCamera();
-    final user = ref.read(authStateProvider).user;
-    if (path != null && user != null) {
-      try {
-        final url = await FirebaseStorageService.instance.uploadProfileAvatar(
-          path,
-          allowLocalFallback: false,
-        );
-        if (!mounted) return;
-        if (!FirestorePetRepository.isShareableMediaUrl(url)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Could not upload profile photo. Check your connection and try again.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
-        ref.read(authStateProvider.notifier).updateUser(
-              user.copyWith(photoUrl: url),
-            );
-        setState(() {});
-      } on FirebaseException catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not upload profile photo (${_firebaseErrorSnackText(e)}). '
-              'If this is not the network, check Firebase Storage rules and App Check.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not upload profile photo: ${_firebaseErrorSnackText(e)}',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _addGalleryPhoto() async {
     final path = await pickPhotoFromGallery();
     final user = ref.read(authStateProvider).user;
@@ -215,17 +137,7 @@ class _OwnerMediaStripState extends ConsumerState<OwnerMediaStrip> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text('Your photos & videos', style: Theme.of(context).textTheme.titleLarge),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: _setProfilePhoto,
-              icon: const Icon(Icons.face, size: 18),
-              label: const Text('Profile pic'),
-            ),
-          ],
-        ),
+        Text('Your photos & videos', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,

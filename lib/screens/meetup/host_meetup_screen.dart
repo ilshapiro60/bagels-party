@@ -12,8 +12,10 @@ import '../../providers/app_providers.dart';
 import '../../services/approximate_location.dart';
 import '../../services/firestore_meetup_repository.dart';
 import '../../services/firestore_profile_repository.dart';
+import '../../utils/hosting_fee.dart';
 import '../../widgets/host_venue_map.dart';
 import '../../widgets/pizza_commitment.dart';
+import 'party_paywall_screen.dart';
 
 class HostMeetupScreen extends ConsumerStatefulWidget {
   const HostMeetupScreen({super.key});
@@ -99,7 +101,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
 
   void _onCreatePressed() {
     if (_creating) return;
-    _createMeetup();
+    _prepareAndMaybePaywall();
   }
 
   void _exitHostFlow() {
@@ -123,20 +125,20 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
     }
   }
 
-  Future<void> _createMeetup() async {
+  Meetup? _buildMeetup() {
     final title = _titleController.text.trim();
     final address = _addressController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add a party title.')),
       );
-      return;
+      return null;
     }
     if (address.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add an address for your space.')),
       );
-      return;
+      return null;
     }
     if (!isFirebaseInitialized) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -144,61 +146,84 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
           content: Text('Firebase is not configured - cannot save the party yet.'),
         ),
       );
-      return;
+      return null;
     }
+
+    final user = ref.read(authStateProvider).user;
+    if (user == null) return null;
+
+    final when = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
+    final lat = user.latitude ?? kFallbackMapLat;
+    final lng = user.longitude ?? kFallbackMapLng;
+    final myPetIds = ref.read(userPetsProvider).map((p) => p.id).toList();
+    final venueName = _venueNameController.text.trim();
+
+    return Meetup(
+      id: const Uuid().v4(),
+      hostId: user.id,
+      hostName: user.eventHostDisplayName,
+      hostPhotoUrl: user.photoUrl,
+      title: title,
+      description: _descController.text.trim().isEmpty
+          ? null
+          : _descController.text.trim(),
+      theme: _selectedTheme,
+      dateTime: when,
+      durationMinutes: _duration,
+      address: address,
+      latitude: lat,
+      longitude: lng,
+      maxGuests: _isPublic ? _maxGuests : 0,
+      invites: const [],
+      pizzaCommitment: PizzaCommitment(
+        willProvidePizza: _willProvidePizza,
+        willProvideDrinks: _willProvideDrinks,
+        willAccommodateAllergies: _willAccommodateAllergies,
+        acknowledgesHostDuty: _acknowledgesHostDuty,
+      ),
+      status: MeetupStatus.open,
+      hasYard: _hasYard,
+      hasPool: _hasPool,
+      kidFriendly: _kidFriendly,
+      compatiblePetIds: myPetIds,
+      createdAt: DateTime.now(),
+      isPublic: _isPublic,
+      venueName: venueName.isEmpty ? null : venueName,
+    );
+  }
+
+  Future<void> _prepareAndMaybePaywall() async {
+    FocusScope.of(context).unfocus();
+
+    final meetup = _buildMeetup();
+    if (meetup == null) return;
 
     final user = ref.read(authStateProvider).user;
     if (user == null) return;
 
-    FocusScope.of(context).unfocus();
+    final fee = calculateHostingFee(user, meetup.maxGuests);
 
+    if (fee <= 0) {
+      await _createMeetupDirectly(meetup, user);
+    } else {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PartyPaywallScreen(meetup: meetup, fee: fee),
+        ),
+      );
+    }
+  }
+
+  Future<void> _createMeetupDirectly(Meetup meetup, user) async {
     setState(() => _creating = true);
     try {
-      final when = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _selectedTime.hour,
-        _selectedTime.minute,
-      );
-      final lat = user.latitude ?? kFallbackMapLat;
-      final lng = user.longitude ?? kFallbackMapLng;
-      final myPetIds = ref.read(userPetsProvider).map((p) => p.id).toList();
-
-      final venueName = _venueNameController.text.trim();
-      final meetup = Meetup(
-        id: const Uuid().v4(),
-        hostId: user.id,
-        hostName: user.eventHostDisplayName,
-        hostPhotoUrl: user.photoUrl,
-        title: title,
-        description: _descController.text.trim().isEmpty
-            ? null
-            : _descController.text.trim(),
-        theme: _selectedTheme,
-        dateTime: when,
-        durationMinutes: _duration,
-        address: address,
-        latitude: lat,
-        longitude: lng,
-        maxGuests: _isPublic ? _maxGuests : 0,
-        invites: const [],
-        pizzaCommitment: PizzaCommitment(
-          willProvidePizza: _willProvidePizza,
-          willProvideDrinks: _willProvideDrinks,
-          willAccommodateAllergies: _willAccommodateAllergies,
-          acknowledgesHostDuty: _acknowledgesHostDuty,
-        ),
-        status: MeetupStatus.open,
-        hasYard: _hasYard,
-        hasPool: _hasPool,
-        kidFriendly: _kidFriendly,
-        compatiblePetIds: myPetIds,
-        createdAt: DateTime.now(),
-        isPublic: _isPublic,
-        venueName: venueName.isEmpty ? null : venueName,
-      );
-
       await FirestoreMeetupRepository.createMeetup(meetup);
       await FirestoreProfileRepository.incrementHostCount(user.id);
       ref.read(authStateProvider.notifier).updateUser(
@@ -206,7 +231,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
           );
 
       if (!mounted) return;
-      if (_isPublic) {
+      if (meetup.isPublic) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Public event created! Nearby pet owners can now discover it.'),
