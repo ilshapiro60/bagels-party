@@ -72,7 +72,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 280,
+                  height: 320,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -142,6 +142,12 @@ class HomeScreen extends ConsumerWidget {
                                   ? () =>
                                       context.push('/party-guests/${meetup.id}')
                                   : null,
+                              onAddPhotos: () => context.push(
+                                Uri(path: '/add-story', queryParameters: {
+                                  'meetupId': meetup.id,
+                                  'meetupTitle': meetup.title,
+                                }).toString(),
+                              ),
                             );
                           },
                         ),
@@ -176,9 +182,6 @@ class HomeScreen extends ConsumerWidget {
             ),
             SliverToBoxAdapter(
               child: _buildNearbyMatches(context, ref, pets),
-            ),
-            SliverToBoxAdapter(
-              child: _buildNeighborhoodBanner(context, areaLabel),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
@@ -691,48 +694,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildNeighborhoodBanner(BuildContext context, String areaLabel) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            PawPartyColors.secondary,
-            PawPartyColors.secondary.withValues(alpha: 0.8),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  areaLabel,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Discover pets nearby and host your own meetups.',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 13,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.map_outlined, size: 48, color: Colors.white.withValues(alpha: 0.3)),
-        ],
-      ),
-    ).animate().fadeIn(delay: 400.ms, duration: 500.ms);
-  }
 }
 
 class _PartyInviteCard extends ConsumerStatefulWidget {
@@ -929,7 +890,7 @@ class _FriendChip extends ConsumerWidget {
     final async = ref.watch(ownerProfileProvider(uid));
     return async.when(
       data: (p) => GestureDetector(
-        onTap: () => context.push('/chat/$uid'),
+        onTap: () => context.push('/friend/$uid'),
         child: SizedBox(
           width: 56,
           child: Column(

@@ -120,7 +120,53 @@ exports.onBuddyRequestUpdated = onDocumentUpdated(
 );
 
 // ---------------------------------------------------------------------------
-// 3. Party invite created → notify the invited guest
+// 3. Direct message created → notify the other participant
+// ---------------------------------------------------------------------------
+exports.onDirectMessageCreated = onDocumentCreated(
+  "conversations/{conversationId}/messages/{messageId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const { fromUid, body, isShout } = data;
+    if (!fromUid || !body) return;
+
+    const convSnap = await db
+      .collection("conversations")
+      .doc(event.params.conversationId)
+      .get();
+    if (!convSnap.exists) return;
+
+    const participants = convSnap.data().participants || [];
+    const recipientUids = participants.filter((uid) => uid !== fromUid);
+    if (recipientUids.length === 0) return;
+
+    const senderSnap = await db.collection("profiles").doc(fromUid).get();
+    const senderName = senderSnap.exists
+      ? senderSnap.data().displayName || "A friend"
+      : "A friend";
+
+    const preview = body.length > 100 ? body.substring(0, 100) + "…" : body;
+    const title = isShout
+      ? `📢 ${senderName} shouted`
+      : `${senderName}`;
+
+    for (const recipientUid of recipientUids) {
+      await sendToUser(
+        recipientUid,
+        { title, body: preview },
+        {
+          type: isShout ? "shout" : "direct_message",
+          conversationId: event.params.conversationId,
+          fromUid,
+        },
+      );
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 4. Party invite created → notify the invited guest
 // ---------------------------------------------------------------------------
 exports.onPartyInviteCreated = onDocumentCreated(
   "partyInvites/{inviteId}",
@@ -153,7 +199,7 @@ exports.onPartyInviteCreated = onDocumentCreated(
 );
 
 // ---------------------------------------------------------------------------
-// 4. Party invite accepted → notify the host
+// 5. Party invite accepted → notify the host
 // ---------------------------------------------------------------------------
 exports.onPartyInviteUpdated = onDocumentUpdated(
   "partyInvites/{inviteId}",

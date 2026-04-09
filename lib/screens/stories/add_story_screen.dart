@@ -14,7 +14,10 @@ import '../../widgets/paw_file_image.dart';
 import '../../widgets/paw_video_thumb.dart';
 
 class AddStoryScreen extends ConsumerStatefulWidget {
-  const AddStoryScreen({super.key});
+  const AddStoryScreen({super.key, this.meetupId, this.meetupTitle});
+
+  final String? meetupId;
+  final String? meetupTitle;
 
   @override
   ConsumerState<AddStoryScreen> createState() => _AddStoryScreenState();
@@ -26,6 +29,14 @@ class _AddStoryScreenState extends ConsumerState<AddStoryScreen> {
   final List<String> _images = [];
   final List<String> _videos = [];
   bool _publishing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.meetupTitle != null) {
+      _title.text = widget.meetupTitle!;
+    }
+  }
 
   @override
   void dispose() {
@@ -123,6 +134,7 @@ class _AddStoryScreenState extends ConsumerState<AddStoryScreen> {
         authorId: user.id,
         authorName: user.displayName,
         authorPhotoPath: user.photoUrl,
+        meetupId: widget.meetupId,
         imagePaths: imagePaths,
         videoPaths: videoPaths,
         latitude: user.latitude,

@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter (Android + Places)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "toolArgs": [
+        "--dart-define=GOOGLE_PLACES_API_KEY=AIzaSyAY3zfWMNvdCL6MygoKOC-KbnVt-KAwHKM"
+      ]
+    },
+    {
+      "name": "Flutter (iOS + Places)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "toolArgs": [
+        "--dart-define=GOOGLE_PLACES_API_KEY=AIzaSyDwGDELiPyaq2VjCD8bBnZa_RolPzcEKLM"
+      ]
+    }
+  ]
+}

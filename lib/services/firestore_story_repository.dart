@@ -45,23 +45,39 @@ class FirestoreStoryRepository {
     await ref.delete();
   }
 
+  static List<PartyStory> _sortNewest(List<PartyStory> list) {
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
   /// Stories by a single author, newest first (for "My stories" screen).
   static Stream<List<PartyStory>> watchStoriesByAuthor(String authorId) {
     return _stories
         .where('authorId', isEqualTo: authorId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map(_fromSnapshot).toList());
+        .map((snap) => _sortNewest(snap.docs.map(_fromSnapshot).toList()));
+  }
+
+  /// Stories linked to a specific meetup.
+  static Stream<List<PartyStory>> watchStoriesForMeetup(String meetupId) {
+    return _stories
+        .where('meetupId', isEqualTo: meetupId)
+        .snapshots()
+        .map((snap) => _sortNewest(snap.docs.map(_fromSnapshot).toList()));
   }
 
   /// Community stories from the last 30 days, newest first.
-  /// Client should distance-filter on top.
   static Stream<List<PartyStory>> watchCommunityStories() {
-    final cutoff = DateTime.now().subtract(const Duration(days: 30));
     return _stories
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(cutoff))
         .orderBy('createdAt', descending: true)
+        .limit(100)
         .snapshots()
-        .map((snap) => snap.docs.map(_fromSnapshot).toList());
+        .map((snap) {
+      final cutoff = DateTime.now().subtract(const Duration(days: 30));
+      return snap.docs
+          .map(_fromSnapshot)
+          .where((s) => s.createdAt.isAfter(cutoff))
+          .toList();
+    });
   }
 }

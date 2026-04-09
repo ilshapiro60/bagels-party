@@ -7,6 +7,7 @@ import '../../config/theme.dart';
 import '../../models/neighborhood_news.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firestore_neighborhood_news_repository.dart';
+import '../../widgets/paw_file_image.dart';
 
 String? _snippetForReport(NeighborhoodNewsPost post) {
   final t = post.title?.trim();
@@ -98,6 +99,67 @@ class _NeighborhoodNewsPostDetailScreenState
         );
       }
     }
+  }
+
+  Widget _buildCategoryBadge(NeighborhoodNewsPost post) {
+    final cat = post.newsCategory;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: PawPartyColors.secondary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(cat.icon, size: 16, color: PawPartyColors.secondary),
+            const SizedBox(width: 6),
+            Text(
+              cat.label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: PawPartyColors.secondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhotoGallery(BuildContext context, List<String> urls) {
+    return SizedBox(
+      height: 180,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: urls.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          return GestureDetector(
+            onTap: () => _showFullscreenPhoto(context, urls, i),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 180,
+                height: 180,
+                child: PawFileOrNetworkImage(path: urls[i]),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showFullscreenPhoto(BuildContext context, List<String> urls, int initial) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _FullscreenPhotoViewer(urls: urls, initialIndex: initial),
+      ),
+    );
   }
 
   Future<void> _report(NeighborhoodNewsPost post) async {
@@ -197,6 +259,8 @@ class _NeighborhoodNewsPostDetailScreenState
                 child: ListView(
                   padding: const EdgeInsets.all(20),
                   children: [
+                    _buildCategoryBadge(post),
+                    const SizedBox(height: 12),
                     if (post.title != null && post.title!.trim().isNotEmpty)
                       Text(
                         post.title!,
@@ -205,6 +269,10 @@ class _NeighborhoodNewsPostDetailScreenState
                     if (post.title != null && post.title!.trim().isNotEmpty)
                       const SizedBox(height: 12),
                     Text(post.body, style: Theme.of(context).textTheme.bodyLarge),
+                    if (post.photoUrls.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _buildPhotoGallery(context, post.photoUrls),
+                    ],
                     const SizedBox(height: 16),
                     Text(
                       '${post.authorDisplayName} · ${df.format(post.createdAt)}',
@@ -316,6 +384,72 @@ class _NeighborhoodNewsPostDetailScreenState
                 ),
               ),
             ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FullscreenPhotoViewer extends StatefulWidget {
+  const _FullscreenPhotoViewer({required this.urls, required this.initialIndex});
+
+  final List<String> urls;
+  final int initialIndex;
+
+  @override
+  State<_FullscreenPhotoViewer> createState() => _FullscreenPhotoViewerState();
+}
+
+class _FullscreenPhotoViewerState extends State<_FullscreenPhotoViewer> {
+  late final PageController _pageController;
+  late int _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialIndex;
+    _pageController = PageController(initialPage: _current);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: widget.urls.length > 1
+            ? Text('${_current + 1} / ${widget.urls.length}')
+            : null,
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.urls.length,
+        onPageChanged: (i) => setState(() => _current = i),
+        itemBuilder: (context, i) {
+          return InteractiveViewer(
+            child: Center(
+              child: Image.network(
+                widget.urls[i],
+                fit: BoxFit.contain,
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
+                },
+                errorBuilder: (_, _, _) => const Center(
+                  child: Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                ),
+              ),
+            ),
           );
         },
       ),

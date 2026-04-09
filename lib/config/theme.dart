@@ -1,6 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+TextStyle _tiktokSans({
+  double fontSize = 14,
+  FontWeight fontWeight = FontWeight.w400,
+  Color? color,
+}) {
+  return GoogleFonts.getFont(
+    'TikTok Sans',
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    color: color,
+  );
+}
+
+TextTheme _tiktokSansTextTheme() {
+  return GoogleFonts.getTextTheme('TikTok Sans');
+}
+
 class PawPartyColors {
   /// Deep energetic blue (CTAs, key accents).
   static const Color primary = Color(0xFF0B5CB3);
@@ -50,48 +67,48 @@ class PawPartyTheme {
         brightness: Brightness.light,
       ),
       scaffoldBackgroundColor: PawPartyColors.background,
-      textTheme: GoogleFonts.nunitoTextTheme().copyWith(
-        displayLarge: GoogleFonts.fredoka(
+      textTheme: _tiktokSansTextTheme().copyWith(
+        displayLarge: _tiktokSans(
           fontSize: 32,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: PawPartyColors.textPrimary,
         ),
-        displayMedium: GoogleFonts.fredoka(
+        displayMedium: _tiktokSans(
           fontSize: 28,
+          fontWeight: FontWeight.w700,
+          color: PawPartyColors.textPrimary,
+        ),
+        headlineLarge: _tiktokSans(
+          fontSize: 24,
           fontWeight: FontWeight.w600,
           color: PawPartyColors.textPrimary,
         ),
-        headlineLarge: GoogleFonts.fredoka(
-          fontSize: 24,
-          fontWeight: FontWeight.w500,
-          color: PawPartyColors.textPrimary,
-        ),
-        headlineMedium: GoogleFonts.fredoka(
+        headlineMedium: _tiktokSans(
           fontSize: 20,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: PawPartyColors.textPrimary,
         ),
-        titleLarge: GoogleFonts.nunito(
+        titleLarge: _tiktokSans(
           fontSize: 18,
           fontWeight: FontWeight.w700,
           color: PawPartyColors.textPrimary,
         ),
-        titleMedium: GoogleFonts.nunito(
+        titleMedium: _tiktokSans(
           fontSize: 16,
           fontWeight: FontWeight.w600,
           color: PawPartyColors.textPrimary,
         ),
-        bodyLarge: GoogleFonts.nunito(
+        bodyLarge: _tiktokSans(
           fontSize: 16,
           fontWeight: FontWeight.w400,
           color: PawPartyColors.textPrimary,
         ),
-        bodyMedium: GoogleFonts.nunito(
+        bodyMedium: _tiktokSans(
           fontSize: 14,
           fontWeight: FontWeight.w400,
           color: PawPartyColors.textSecondary,
         ),
-        labelLarge: GoogleFonts.nunito(
+        labelLarge: _tiktokSans(
           fontSize: 14,
           fontWeight: FontWeight.w700,
           color: PawPartyColors.surface,
@@ -106,7 +123,7 @@ class PawPartyTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: GoogleFonts.nunito(
+          textStyle: _tiktokSans(
             fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
@@ -120,7 +137,7 @@ class PawPartyTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: GoogleFonts.nunito(
+          textStyle: _tiktokSans(
             fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
@@ -146,7 +163,7 @@ class PawPartyTheme {
           borderSide: const BorderSide(color: PawPartyColors.error, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        hintStyle: GoogleFonts.nunito(
+        hintStyle: _tiktokSans(
           color: PawPartyColors.textHint,
           fontSize: 14,
         ),
@@ -165,7 +182,7 @@ class PawPartyTheme {
         selectedColor: PawPartyColors.primary.withValues(alpha: 0.15),
         // Must set color: labelLarge in textTheme is white (for filled buttons); chips
         // would otherwise use that and become unreadable on light chip backgrounds.
-        labelStyle: GoogleFonts.nunito(
+        labelStyle: _tiktokSans(
           fontSize: 13,
           fontWeight: FontWeight.w600,
           color: PawPartyColors.textPrimary,
@@ -188,9 +205,9 @@ class PawPartyTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.fredoka(
+        titleTextStyle: _tiktokSans(
           fontSize: 20,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: PawPartyColors.textPrimary,
         ),
         iconTheme: const IconThemeData(color: PawPartyColors.textPrimary),

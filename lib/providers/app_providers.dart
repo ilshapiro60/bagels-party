@@ -764,6 +764,13 @@ final myPartyStoriesProvider =
   return FirestoreStoryRepository.watchStoriesByAuthor(authorId);
 });
 
+/// Stories linked to a specific meetup/party.
+final meetupStoriesProvider =
+    StreamProvider.family<List<PartyStory>, String>((ref, meetupId) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreStoryRepository.watchStoriesForMeetup(meetupId);
+});
+
 /// Community stories from the last 30 days (for Discover Events tab).
 final communityStoriesProvider = StreamProvider<List<PartyStory>>((ref) {
   if (!isFirebaseInitialized) return Stream.value([]);

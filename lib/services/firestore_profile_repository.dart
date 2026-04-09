@@ -165,6 +165,25 @@ class FirestoreProfileRepository {
     );
   }
 
+  /// Removes [friendUid] from both users' friendUids arrays.
+  static Future<void> removeFriend({
+    required String uid,
+    required String friendUid,
+  }) async {
+    final batch = _db.batch();
+    batch.set(
+      _profiles.doc(uid),
+      {'friendUids': FieldValue.arrayRemove([friendUid])},
+      SetOptions(merge: true),
+    );
+    batch.set(
+      _profiles.doc(friendUid),
+      {'friendUids': FieldValue.arrayRemove([uid])},
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
   /// Broadcast a shout message to all friends via DMs.
   static Future<void> broadcastShout({
     required String fromUid,

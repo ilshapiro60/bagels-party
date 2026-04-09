@@ -43,6 +43,28 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
   GoogleMapController? _controller;
 
   @override
+  void didUpdateWidget(covariant NearbyPetsMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewerPoint.latitude != widget.viewerPoint.latitude ||
+        oldWidget.viewerPoint.longitude != widget.viewerPoint.longitude ||
+        oldWidget.radiusMiles != widget.radiusMiles) {
+      _animateToCurrentPoint();
+    }
+  }
+
+  void _animateToCurrentPoint() {
+    final c = _controller;
+    if (c == null) return;
+    final target = safeMapLatLngFromGeo(widget.viewerPoint);
+    c.animateCamera(CameraUpdate.newCameraPosition(
+      CameraPosition(
+        target: target,
+        zoom: safeMapZoom(_zoomForRadius(widget.radiusMiles)),
+      ),
+    ));
+  }
+
+  @override
   void dispose() {
     _controller?.dispose();
     super.dispose();
@@ -128,7 +150,9 @@ class _NearbyPetsMapState extends State<NearbyPetsMap> {
       myLocationButtonEnabled: false,
       compassEnabled: fullscreen,
       liteModeEnabled: false,
-      onMapCreated: fullscreen ? null : (c) => _controller = c,
+      onMapCreated: (c) {
+        _controller = c;
+      },
     );
     if (maxHeight != null) {
       return SizedBox(height: maxHeight, width: double.infinity, child: map);

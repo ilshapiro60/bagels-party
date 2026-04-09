@@ -21,6 +21,7 @@ import '../screens/stories/add_story_screen.dart';
 import '../screens/pet/pet_detail_screen.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/friends/friends_screen.dart';
+import '../screens/friends/friend_profile_screen.dart';
 import '../screens/meetup/invite_friends_screen.dart';
 import '../screens/meetup/manage_party_guests_screen.dart';
 import '../screens/neighborhood_news/neighborhood_news_compose_screen.dart';
@@ -135,11 +136,21 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/add-story',
-      builder: (context, state) => const AddStoryScreen(),
+      builder: (context, state) {
+        final meetupId = state.uri.queryParameters['meetupId'];
+        final meetupTitle = state.uri.queryParameters['meetupTitle'];
+        return AddStoryScreen(meetupId: meetupId, meetupTitle: meetupTitle);
+      },
     ),
     GoRoute(
       path: '/friends',
       builder: (context, state) => const FriendsScreen(),
+    ),
+    GoRoute(
+      path: '/friend/:friendUid',
+      builder: (context, state) => FriendProfileScreen(
+        friendUid: state.pathParameters['friendUid']!,
+      ),
     ),
     GoRoute(
       path: '/chat/:friendUid',

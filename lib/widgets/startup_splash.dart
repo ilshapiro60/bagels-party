@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../config/theme.dart';
 
-/// Shown while auth session restores. Uses Bagel’s photo from [assets/images/bagel_splash_cat.png].
+/// Shown while auth session restores.
 class StartupSplash extends StatelessWidget {
   const StartupSplash({super.key});
 
@@ -23,7 +23,7 @@ class StartupSplash extends StatelessWidget {
                   child: Image.asset(
                     'assets/images/bagel_splash_cat.png',
                     fit: BoxFit.cover,
-                    alignment: const Alignment(0, -0.45),
+                    alignment: Alignment.center,
                     errorBuilder: (context, error, stackTrace) => Icon(
                       Icons.pets,
                       size: 72,
@@ -34,9 +34,10 @@ class StartupSplash extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                'Bagel\'s',
-                style: GoogleFonts.fredoka(
-                  fontSize: 40,
+                'Welcome!',
+                style: GoogleFonts.getFont(
+                  'TikTok Sans',
+                  fontSize: 36,
                   fontWeight: FontWeight.w600,
                   color: PawPartyColors.primary,
                   height: 1.1,

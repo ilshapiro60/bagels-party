@@ -34,34 +34,6 @@ String _petBuddyLoadErrorMessage(Object e) {
   return 'Could not load pet buddy requests: $e';
 }
 
-class _FriendConnectionTile extends ConsumerWidget {
-  const _FriendConnectionTile({required this.uid});
-
-  final String uid;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(ownerProfileProvider(uid));
-    return async.when(
-      data: (p) => ListTile(
-        leading: const Icon(Icons.person_outline),
-        title: Text(p.displayName),
-        subtitle: Text(
-          p.neighborhood ?? 'Neighborhood not set',
-          style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
-        ),
-      ),
-      loading: () => const ListTile(
-        leading: Icon(Icons.person_outline),
-        title: Text('Loading…'),
-      ),
-      error: (err, _) => ListTile(
-        leading: const Icon(Icons.person_outline),
-        title: Text('Friend ($uid)'),
-      ),
-    );
-  }
-}
 
 class FriendsScreen extends ConsumerStatefulWidget {
   const FriendsScreen({super.key});
@@ -77,7 +49,6 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncConnectionsOnOpen());
   }
 
-  /// Merges paw-buddy acceptances into [friendUids] (e.g. requester after remote accept).
   Future<void> _syncConnectionsOnOpen() async {
     if (!mounted) return;
     final user = ref.read(authStateProvider).user;
@@ -92,9 +63,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
         final merged = await ProfilePersistence.mergeWithSaved(fresh);
         ref.read(authStateProvider.notifier).updateUser(merged);
       }
-    } catch (_) {
-      // Offline / rules: screen still usable.
-    }
+    } catch (_) {}
   }
 
   Future<void> _acceptPetBuddy(PetBuddyRequest r) async {
@@ -105,9 +74,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
         requestId: r.id,
         actingUid: uid,
       );
-      await FirestoreProfileRepository.syncFriendsFromAcceptedPetBuddyRequests(
-        uid,
-      );
+      await FirestoreProfileRepository.syncFriendsFromAcceptedPetBuddyRequests(uid);
       final fresh = await FirestoreProfileRepository.fetchProfile(uid);
       if (fresh != null && mounted) {
         final merged = await ProfilePersistence.mergeWithSaved(fresh);
@@ -119,27 +86,17 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       ref.invalidate(buddyPetsForPetProvider(r.toPetId));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Paw buddies confirmed — you are connected as pet parents.',
-          ),
-        ),
+        const SnackBar(content: Text('Paw buddies confirmed \u2014 you are connected as pet parents.')),
       );
     } on FirebaseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Accept failed (${_firebaseErrorSnackText(e)})'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('Accept failed (${_firebaseErrorSnackText(e)})'), behavior: SnackBarBehavior.floating),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Accept failed: $e'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('Accept failed: $e'), behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -148,10 +105,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     final uid = ref.read(authStateProvider).user?.id;
     if (uid == null) return;
     try {
-      await FirestorePetBuddyRepository.declineRequest(
-        requestId: r.id,
-        actingUid: uid,
-      );
+      await FirestorePetBuddyRepository.declineRequest(requestId: r.id, actingUid: uid);
       ref.invalidate(incomingPetBuddyRequestsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -159,9 +113,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Decline failed: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Decline failed: $e')));
     }
   }
 
@@ -169,10 +121,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     final uid = ref.read(authStateProvider).user?.id;
     if (uid == null) return;
     try {
-      await FirestorePetBuddyRepository.cancelOutgoingRequest(
-        requestId: r.id,
-        actingUid: uid,
-      );
+      await FirestorePetBuddyRepository.cancelOutgoingRequest(requestId: r.id, actingUid: uid);
       ref.invalidate(outgoingPetBuddyRequestsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -180,9 +129,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not cancel: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not cancel: $e')));
     }
   }
 
@@ -190,26 +137,18 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     final uid = ref.read(authStateProvider).user?.id;
     if (uid == null) return;
     try {
-      await FirestorePetBuddyRepository.unmuteBuddyOwners(
-        actingUid: uid,
-        otherOwnerId: otherOwnerId,
-      );
+      await FirestorePetBuddyRepository.unmuteBuddyOwners(actingUid: uid, otherOwnerId: otherOwnerId);
       for (final p in ref.read(userPetsProvider)) {
         ref.invalidate(buddyPetsForPetProvider(p.id));
       }
       ref.invalidate(petBuddyOwnerMutesProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You can send paw buddy requests to each other again.'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        const SnackBar(content: Text('You can send paw buddy requests to each other again.'), behavior: SnackBarBehavior.floating),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not unblock: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not unblock: $e')));
     }
   }
 
@@ -231,192 +170,112 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
         },
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           children: [
-          Text(
-            'Connections',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Browse nearby pets on Discover, open a profile, and tap Befriend to send a paw buddy request. '
-            'When the other parent accepts, your pets are linked and you show up under each other’s connections.',
-            style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: () => context.go('/discover'),
-            icon: const Icon(Icons.explore_outlined),
-            label: const Text('Open Discover'),
-          ),
-          const SizedBox(height: 32),
-          Text(
-            'Pet buddy requests',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Another parent must accept before pets show as paw buddies.',
-            style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          petBuddyIncoming.when(
-            data: (list) {
-              if (list.isEmpty) {
-                return Text(
-                  'No pending pet buddy requests.',
-                  style: TextStyle(color: PawPartyColors.textSecondary),
-                );
-              }
-              return Column(
-                children: list
-                    .map(
-                      (r) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _IncomingPetBuddyCard(
-                          request: r,
-                          onAccept: () => _acceptPetBuddy(r),
-                          onDecline: () => _declinePetBuddy(r),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              );
-            },
-            loading: () => Text(
-              'Loading pet buddy requests…',
-              style: TextStyle(color: PawPartyColors.textSecondary),
+            // --- Discover button ---
+            OutlinedButton.icon(
+              onPressed: () => context.go('/discover'),
+              icon: const Icon(Icons.explore_outlined, size: 18),
+              label: const Text('Find new friends on Discover'),
             ),
-            error: (e, _) => Text(
-              _petBuddyLoadErrorMessage(e),
-              style: TextStyle(color: PawPartyColors.error, fontSize: 13),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Pet buddy requests you sent',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          petBuddyOutgoing.when(
-            data: (list) {
-              if (list.isEmpty) {
-                return Text(
-                  'None waiting.',
-                  style: TextStyle(color: PawPartyColors.textSecondary),
-                );
-              }
-              return Column(
-                children: list
-                    .map(
-                      (r) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _OutgoingPetBuddyCard(
-                          request: r,
-                          onCancel: () => _cancelPetBuddyOutgoing(r),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              );
-            },
-            loading: () => Text(
-              'Loading…',
-              style: TextStyle(color: PawPartyColors.textSecondary, fontSize: 13),
-            ),
-            error: (e, _) => Text(
-              _petBuddyLoadErrorMessage(e),
-              style: TextStyle(color: PawPartyColors.error, fontSize: 13),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Paw buddy blocks',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Parents you have blocked (or who blocked you) cannot send paw buddy requests until someone unblocks here.',
-            style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
-          ),
-          const SizedBox(height: 12),
-          petBuddyMutes.when(
-            data: (mutes) {
-              if (mutes.isEmpty || user == null) {
-                return Text(
-                  'No active paw buddy blocks.',
-                  style: TextStyle(color: PawPartyColors.textSecondary),
-                );
-              }
-              return Column(
-                children: mutes.map((m) {
-                  final otherId = m.otherUid(user.id);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: ref
-                                  .watch(ownerProfileProvider(otherId))
-                                  .when(
-                                    data: (p) => ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      dense: true,
-                                      title: Text(p.displayName),
-                                      subtitle: Text(
-                                        'Paw buddy requests paused',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: PawPartyColors.textSecondary,
-                                        ),
-                                      ),
-                                    ),
-                                    loading: () => const ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      dense: true,
-                                      title: Text('Loading…'),
-                                    ),
-                                    error: (e, s) => ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      dense: true,
-                                      title: Text('User ($otherId)'),
-                                    ),
-                                  ),
-                            ),
-                            TextButton(
-                              onPressed: () => _unmutePetBuddyOwner(otherId),
-                              child: const Text('Unblock'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              );
-            },
-            loading: () => Text(
-              'Loading…',
-              style: TextStyle(color: PawPartyColors.textSecondary, fontSize: 13),
-            ),
-            error: (e, _) => Text(
-              'Could not load blocks: $e',
-              style: TextStyle(color: PawPartyColors.error, fontSize: 13),
-            ),
-          ),
-          if (user != null && user.friendUids.isNotEmpty) ...[
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            // --- Incoming pet buddy requests ---
+            Text('Pet buddy requests', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
             Text(
-              'Your connections (${user.friendUids.length})',
-              style: Theme.of(context).textTheme.titleLarge,
+              'Another parent must accept before pets show as paw buddies.',
+              style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
             ),
             const SizedBox(height: 8),
-            ...user.friendUids.map((uid) => _FriendConnectionTile(uid: uid)),
+            petBuddyIncoming.when(
+              data: (list) {
+                if (list.isEmpty) {
+                  return Text('No pending requests.', style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary));
+                }
+                return Column(
+                  children: list.map((r) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _IncomingPetBuddyCard(request: r, onAccept: () => _acceptPetBuddy(r), onDecline: () => _declinePetBuddy(r)),
+                  )).toList(),
+                );
+              },
+              loading: () => Text('Loading\u2026', style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary)),
+              error: (e, _) => Text(_petBuddyLoadErrorMessage(e), style: TextStyle(color: PawPartyColors.error, fontSize: 12)),
+            ),
+            const SizedBox(height: 16),
+
+            // --- Outgoing ---
+            Text('Requests you sent', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            petBuddyOutgoing.when(
+              data: (list) {
+                if (list.isEmpty) {
+                  return Text('None waiting.', style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary));
+                }
+                return Column(
+                  children: list.map((r) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _OutgoingPetBuddyCard(request: r, onCancel: () => _cancelPetBuddyOutgoing(r)),
+                  )).toList(),
+                );
+              },
+              loading: () => Text('Loading\u2026', style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary)),
+              error: (e, _) => Text(_petBuddyLoadErrorMessage(e), style: TextStyle(color: PawPartyColors.error, fontSize: 12)),
+            ),
+            const SizedBox(height: 16),
+
+            // --- Blocks ---
+            Text('Paw buddy blocks', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Blocked parents cannot exchange requests until unblocked.',
+              style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            petBuddyMutes.when(
+              data: (mutes) {
+                if (mutes.isEmpty || user == null) {
+                  return Text('No active blocks.', style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary));
+                }
+                return Column(
+                  children: mutes.map((m) {
+                    final otherId = m.otherUid(user.id);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: ref.watch(ownerProfileProvider(otherId)).when(
+                                  data: (p) => ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    title: Text(p.displayName, style: const TextStyle(fontSize: 14)),
+                                    subtitle: Text('Requests paused', style: TextStyle(fontSize: 11, color: PawPartyColors.textSecondary)),
+                                  ),
+                                  loading: () => const ListTile(contentPadding: EdgeInsets.zero, dense: true, title: Text('Loading\u2026', style: TextStyle(fontSize: 14))),
+                                  error: (e, s) => ListTile(contentPadding: EdgeInsets.zero, dense: true, title: Text('User ($otherId)', style: const TextStyle(fontSize: 14))),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _unmutePetBuddyOwner(otherId),
+                                child: const Text('Unblock', style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () => Text('Loading\u2026', style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary)),
+              error: (e, _) => Text('Could not load blocks: $e', style: TextStyle(color: PawPartyColors.error, fontSize: 12)),
+            ),
           ],
-        ],
         ),
       ),
     );
@@ -455,7 +314,7 @@ class _IncomingPetBuddyCardState extends State<_IncomingPetBuddyCard> {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: FutureBuilder<({Pet? from, Pet? to})>(
           future: _petsFuture,
           builder: (context, snap) {
@@ -467,32 +326,28 @@ class _IncomingPetBuddyCardState extends State<_IncomingPetBuddyCard> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text('$fromName \u2192 $toName', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
                 Text(
-                  '$fromName → $toName',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  '$fromName\u2019s parent wants a paw buddy link with $toName.',
+                  style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '$fromName’s parent wants a paw buddy link with $toName.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: PawPartyColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton(
                         onPressed: busy ? null : () => widget.onDecline(),
-                        child: const Text('Decline'),
+                        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+                        child: const Text('Decline', style: TextStyle(fontSize: 13)),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: FilledButton(
                         onPressed: busy ? null : () => widget.onAccept(),
-                        child: const Text('Accept'),
+                        style: FilledButton.styleFrom(minimumSize: const Size(0, 36)),
+                        child: const Text('Accept', style: TextStyle(fontSize: 13)),
                       ),
                     ),
                   ],
@@ -526,15 +381,14 @@ class _OutgoingPetBuddyCardState extends State<_OutgoingPetBuddyCard> {
   void initState() {
     super.initState();
     final r = widget.request;
-    _theirPetFuture =
-        FirestorePetRepository.fetchPet(r.toOwnerId, r.toPetId);
+    _theirPetFuture = FirestorePetRepository.fetchPet(r.toOwnerId, r.toPetId);
   }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: FutureBuilder<Pet?>(
           future: _theirPetFuture,
           builder: (context, snap) {
@@ -546,24 +400,18 @@ class _OutgoingPetBuddyCardState extends State<_OutgoingPetBuddyCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Waiting on $name’s parent',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
+                      Text('Waiting on $name\u2019s parent', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
                       Text(
                         'They can accept or decline under Friends.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: PawPartyColors.textSecondary,
-                        ),
+                        style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
                       ),
                     ],
                   ),
                 ),
                 TextButton(
                   onPressed: busy ? null : () => widget.onCancel(),
-                  child: const Text('Cancel'),
+                  child: const Text('Cancel', style: TextStyle(fontSize: 13)),
                 ),
               ],
             );

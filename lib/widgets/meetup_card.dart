@@ -12,6 +12,7 @@ class MeetupCard extends StatelessWidget {
   final String? guestSummaryOverride;
   final VoidCallback? onHostInviteMore;
   final VoidCallback? onHostManageGuests;
+  final VoidCallback? onAddPhotos;
 
   const MeetupCard({
     super.key,
@@ -21,6 +22,7 @@ class MeetupCard extends StatelessWidget {
     this.guestSummaryOverride,
     this.onHostInviteMore,
     this.onHostManageGuests,
+    this.onAddPhotos,
   });
 
   @override
@@ -186,6 +188,21 @@ class MeetupCard extends StatelessWidget {
                     ),
                   ),
               ],
+            ),
+          ],
+          if (onAddPhotos != null) ...[
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: onAddPhotos,
+                icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+                label: const Text('Add photos'),
+                style: TextButton.styleFrom(
+                  foregroundColor: PawPartyColors.bloomPink,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                ),
+              ),
             ),
           ],
         ],

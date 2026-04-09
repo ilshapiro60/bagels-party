@@ -32,7 +32,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
   String _selectedFilter = 'All';
   double _radiusMiles = 5.0;
   final ScrollController _listScroll = ScrollController();
-  final Map<String, GlobalKey> _cardKeys = {};
+
   late final TabController _tabController;
   final TextEditingController _vetSearchController = TextEditingController();
 
@@ -57,7 +57,11 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
 
   UserProfile? _effectiveUser(UserProfile? real) {
     if (_overrideLat == null || _overrideLng == null || real == null) return real;
-    return real.copyWith(latitude: _overrideLat, longitude: _overrideLng);
+    return real.copyWithCoordinates(
+      latitude: _overrideLat!,
+      longitude: _overrideLng!,
+      neighborhood: _overrideLabel,
+    );
   }
 
   String _locationLabel(UserProfile? user) {
@@ -393,50 +397,51 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
     required bool showViewerOnMap,
     required Pet? primaryPet,
   }) {
-    return Column(
-      children: [
-        _buildSearchBar(),
-        _buildFilters(),
-        _buildRadiusSlider(showViewerOnMap),
-        _buildMapPrivacyBanner(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: NearbyPetsMap(
-            pets: visiblePets,
-            viewerPoint: viewerPoint,
-            viewerProfile: viewerProfile,
-            radiusMiles: _radiusMiles,
-            showViewerLocation: showViewerOnMap,
-            onPetMarkerTapped: _openPetProfileFromMap,
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            controller: _listScroll,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            itemCount: visiblePets.length,
-            itemBuilder: (context, index) {
-              final pet = visiblePets[index];
-              _cardKeys[pet.id] ??= GlobalKey();
-              final compatibility = primaryPet != null
-                  ? calculatePetCompatibility(primaryPet, pet)
-                  : 0.0;
-              return Padding(
-                key: _cardKeys[pet.id],
-                padding: const EdgeInsets.only(bottom: 12),
-                child: PetCard(
-                    pet: pet,
-                    compatibility: compatibility,
-                    onTap: () => context.push('/pet/${pet.id}'),
-                  )
-                    .animate()
-                    .fadeIn(delay: (100 * index).ms, duration: 400.ms)
-                    .slideY(begin: 0.1),
-              );
-            },
-          ),
-        ),
-      ],
+    return ListView.builder(
+      controller: _listScroll,
+      padding: const EdgeInsets.only(bottom: 24),
+      itemCount: visiblePets.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildSearchBar(),
+              _buildFilters(),
+              _buildRadiusSlider(showViewerOnMap),
+              _buildMapPrivacyBanner(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: NearbyPetsMap(
+                  pets: visiblePets,
+                  viewerPoint: viewerPoint,
+                  viewerProfile: viewerProfile,
+                  radiusMiles: _radiusMiles,
+                  showViewerLocation: showViewerOnMap,
+                  onPetMarkerTapped: _openPetProfileFromMap,
+                ),
+              ),
+            ],
+          );
+        }
+        final petIndex = index - 1;
+        final pet = visiblePets[petIndex];
+        final compatibility = primaryPet != null
+            ? calculatePetCompatibility(primaryPet, pet)
+            : 0.0;
+        return Padding(
+          key: ValueKey(pet.id),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: PetCard(
+              pet: pet,
+              compatibility: compatibility,
+              onTap: () => context.push('/pet/${pet.id}'),
+            )
+              .animate()
+              .fadeIn(delay: (100 * petIndex).ms, duration: 400.ms)
+              .slideY(begin: 0.1),
+        );
+      },
     );
   }
 
@@ -447,162 +452,162 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
     final anchor = vetClinicsMapAnchor(user, radiusFiltered);
     final listClinics = _vetClinicsMatchingSearch(radiusFiltered);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildRadiusSlider(showViewerOnMap),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: TextField(
-            controller: _vetSearchController,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'Search clinics by name or address…',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: PawPartyColors.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: PawPartyColors.divider),
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 24),
+      itemCount: listClinics.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildRadiusSlider(showViewerOnMap),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: TextField(
+                  controller: _vetSearchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Search clinics by name or address…',
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: PawPartyColors.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: PawPartyColors.divider),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.local_hospital_outlined, size: 18, color: PawPartyColors.secondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Pins need saved coordinates (we geocode on save when an address is set). Red markers: '
+                        '${radiusFiltered.where((c) => c.latitude != null && c.longitude != null).length} '
+                        'on map; list includes clinics without coordinates too.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: PawPartyColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: CommunityVetClinicsMap(
+                  clinics: radiusFiltered,
+                  viewerPoint: anchor,
+                  radiusMiles: _radiusMiles,
+                  showViewerLocation: showViewerOnMap,
+                  onClinicMarkerTapped: _openVetClinicInGoogleMapsFromMarker,
+                ),
+              ),
+              if (listClinics.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    clinicsSorted.isEmpty
+                        ? 'No vet clinics yet. When neighbors link a clinic on a pet profile, it appears here.'
+                        : 'No clinics match your search or distance filter.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: PawPartyColors.textSecondary),
+                  ),
+                ),
+            ],
+          );
+        }
+        final clinicIndex = index - 1;
+        final c = listClinics[clinicIndex];
+        final dist = _vetClinicDistanceLabel(user, c);
+        final onMap = c.latitude != null && c.longitude != null;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Material(
+            color: PawPartyColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              onTap: () => _showVetClinicDetailSheet(c),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: PawPartyColors.divider),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            c.displayName,
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        if (onMap)
+                          Icon(
+                            Icons.place,
+                            size: 20,
+                            color: PawPartyColors.primary,
+                          ),
+                      ],
+                    ),
+                    if (c.address != null &&
+                        c.address!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        c.address!,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: PawPartyColors.textSecondary,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                            '${c.linkedOwnerCount} neighbor${c.linkedOwnerCount == 1 ? '' : 's'}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                            '${c.linkCount} pet${c.linkCount == 1 ? '' : 's'}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        if (dist != null)
+                          Chip(
+                            visualDensity: VisualDensity.compact,
+                            avatar: const Icon(Icons.near_me_outlined, size: 16),
+                            label: Text(dist, style: const TextStyle(fontSize: 12)),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.local_hospital_outlined, size: 18, color: PawPartyColors.secondary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Pins need saved coordinates (we geocode on save when an address is set). Red markers: '
-                  '${radiusFiltered.where((c) => c.latitude != null && c.longitude != null).length} '
-                  'on map; list includes clinics without coordinates too.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.35,
-                    color: PawPartyColors.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: CommunityVetClinicsMap(
-            clinics: radiusFiltered,
-            viewerPoint: anchor,
-            radiusMiles: _radiusMiles,
-            showViewerLocation: showViewerOnMap,
-            onClinicMarkerTapped: _openVetClinicInGoogleMapsFromMarker,
-          ),
-        ),
-        Expanded(
-          child: listClinics.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      clinicsSorted.isEmpty
-                          ? 'No vet clinics yet. When neighbors link a clinic on a pet profile, it appears here.'
-                          : 'No clinics match your search or distance filter.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: PawPartyColors.textSecondary),
-                    ),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  itemCount: listClinics.length,
-                  separatorBuilder: (context, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final c = listClinics[index];
-                    final dist = _vetClinicDistanceLabel(user, c);
-                    final onMap =
-                        c.latitude != null && c.longitude != null;
-                    return Material(
-                      color: PawPartyColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
-                        onTap: () => _showVetClinicDetailSheet(c),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: PawPartyColors.divider),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      c.displayName,
-                                      style: Theme.of(context).textTheme.titleMedium,
-                                    ),
-                                  ),
-                                  if (onMap)
-                                    Icon(
-                                      Icons.place,
-                                      size: 20,
-                                      color: PawPartyColors.primary,
-                                    ),
-                                ],
-                              ),
-                              if (c.address != null &&
-                                  c.address!.trim().isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  c.address!,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: PawPartyColors.textSecondary,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 10),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 6,
-                                children: [
-                                  Chip(
-                                    visualDensity: VisualDensity.compact,
-                                    label: Text(
-                                      '${c.linkedOwnerCount} neighbor${c.linkedOwnerCount == 1 ? '' : 's'}',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                  Chip(
-                                    visualDensity: VisualDensity.compact,
-                                    label: Text(
-                                      '${c.linkCount} pet${c.linkCount == 1 ? '' : 's'}',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                  if (dist != null)
-                                    Chip(
-                                      visualDensity: VisualDensity.compact,
-                                      avatar: const Icon(Icons.near_me_outlined, size: 16),
-                                      label: Text(dist, style: const TextStyle(fontSize: 12)),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
+        );
+      },
     );
   }
 

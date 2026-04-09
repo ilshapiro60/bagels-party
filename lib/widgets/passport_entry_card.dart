@@ -80,12 +80,16 @@ class PassportEntryCard extends StatelessWidget {
                           ),
                           if (entry.meetupTheme != null) ...[
                             const Text(' • ', style: TextStyle(color: PawPartyColors.textHint)),
-                            Text(
-                              entry.meetupTheme!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _themeColor(entry.meetupTheme),
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                entry.meetupTheme!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _themeColor(entry.meetupTheme),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -226,23 +230,21 @@ class PassportEntryCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 10),
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     _tag(
                       entry.playOutcome.label,
                       _outcomeColor(entry.playOutcome),
                     ),
-                    const SizedBox(width: 6),
                     if (entry.warmUpMinutes > 0)
                       _tag(
                         '${entry.warmUpMinutes}min warm-up',
                         PawPartyColors.secondary,
                       ),
                     if (entry.wasAnxious)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: _tag('Anxious', PawPartyColors.error),
-                      ),
+                      _tag('Anxious', PawPartyColors.error),
                   ],
                 ),
               ],

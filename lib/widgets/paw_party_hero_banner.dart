@@ -24,7 +24,6 @@ class PawPartyHeroBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final decodeW = (MediaQuery.sizeOf(context).width * dpr).round();
-    final decodeH = (height * dpr).round();
     final radius = borderRadius ??
         const BorderRadius.vertical(bottom: Radius.circular(28));
     return ClipRRect(
@@ -40,7 +39,6 @@ class PawPartyHeroBanner extends StatelessWidget {
               fit: BoxFit.cover,
               alignment: imageAlignment,
               cacheWidth: decodeW,
-              cacheHeight: decodeH,
               errorBuilder: (context, error, stackTrace) => ColoredBox(
                 color: PawPartyColors.surfaceVariant,
                 child: Icon(
