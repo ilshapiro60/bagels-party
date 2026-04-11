@@ -342,4 +342,21 @@ class FirebaseStorageService {
       allowLocalFallback: false,
     );
   }
+
+  Future<String> uploadNewsVideo({
+    required String localPath,
+    required String postId,
+  }) async {
+    if (!_ready) {
+      throw StateError('Sign in to upload media.');
+    }
+    final uid = _uid!;
+    final ext = p.extension(localPath);
+    final name = '${const Uuid().v4()}$ext';
+    return uploadLocalPath(
+      localPath: localPath,
+      storageRelativePath: 'news/$postId/$uid/videos/$name',
+      allowLocalFallback: false,
+    );
+  }
 }

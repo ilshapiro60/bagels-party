@@ -41,7 +41,7 @@ class HomeScreen extends ConsumerWidget {
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
-              child: _buildHeader(context, userName, areaLabel, photoUrl),
+              child: _buildHeader(context, ref, userName, areaLabel, photoUrl),
             ),
             SliverToBoxAdapter(
               child: _buildFriendsSection(context, ref, authState.user),
@@ -63,7 +63,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 320,
+                  height: 280,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -147,7 +147,7 @@ class HomeScreen extends ConsumerWidget {
             ),
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 200,
+                height: 160,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -171,7 +171,7 @@ class HomeScreen extends ConsumerWidget {
             SliverToBoxAdapter(
               child: _buildNewsletterCard(context),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
           ],
         ),
       ),
@@ -180,13 +180,15 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildHeader(
     BuildContext context,
+    WidgetRef ref,
     String name,
     String areaLabel,
     String? photoUrl,
   ) {
     final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
+    final hasUnread = ref.watch(hasUnreadMessagesProvider);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 24, 8),
+      padding: const EdgeInsets.fromLTRB(16, 14, 20, 4),
       child: Row(
         children: [
           Expanded(
@@ -195,13 +197,13 @@ class HomeScreen extends ConsumerWidget {
               children: [
                 Text(
                   name,
-                  style: Theme.of(context).textTheme.displayMedium,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Row(
                   children: [
-                    Icon(Icons.location_on, size: 16, color: PawPartyColors.textSecondary),
-                    const SizedBox(width: 4),
+                    Icon(Icons.location_on, size: 14, color: PawPartyColors.textSecondary),
+                    const SizedBox(width: 3),
                     Expanded(
                       child: Text(
                         areaLabel,
@@ -214,6 +216,42 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
           ),
+          GestureDetector(
+            onTap: () => context.push('/messenger'),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: PawPartyColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.chat_bubble_outline,
+                    size: 20,
+                    color: PawPartyColors.primary,
+                  ),
+                ),
+                if (hasUnread)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: PawPartyColors.error,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: PawPartyColors.background, width: 2),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
           GestureDetector(
             onTap: () => context.go('/profile'),
             child: CircleAvatar(
@@ -237,15 +275,15 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildNewsletterCard(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Material(
         color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => context.push('/neighborhood-news'),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
                 Icon(Icons.forum_outlined, size: 22, color: PawPartyColors.primary),
@@ -285,13 +323,13 @@ class HomeScreen extends ConsumerWidget {
     final friendUids = user?.friendUids ?? [];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('Friends', style: Theme.of(context).textTheme.titleMedium),
+              Text('Friends', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               const Spacer(),
               if (user != null)
                 TextButton(
@@ -318,15 +356,15 @@ class HomeScreen extends ConsumerWidget {
           if (friendUids.isEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: PawPartyColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.people_outline, size: 24, color: PawPartyColors.textHint),
-                  const SizedBox(width: 12),
+                  Icon(Icons.people_outline, size: 20, color: PawPartyColors.textHint),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'No friends yet — discover pets nearby to connect.',
@@ -347,7 +385,7 @@ class HomeScreen extends ConsumerWidget {
             )
           else
             SizedBox(
-              height: 72,
+              height: 64,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: friendUids.length,
@@ -385,13 +423,13 @@ class HomeScreen extends ConsumerWidget {
 
         final preview = nearby.take(3).toList();
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Text('Events nearby', style: Theme.of(context).textTheme.titleMedium),
+                  Text('Events nearby', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   const Spacer(),
                   TextButton(
                     onPressed: () => context.go('/discover', extra: 2),
@@ -415,12 +453,12 @@ class HomeScreen extends ConsumerWidget {
 
   Widget _buildSectionHeader(BuildContext context, String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: PawPartyColors.primary),
-          const SizedBox(width: 8),
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          Icon(icon, size: 18, color: PawPartyColors.primary),
+          const SizedBox(width: 6),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -430,44 +468,44 @@ class HomeScreen extends ConsumerWidget {
     return GestureDetector(
       onTap: () => context.push('/pet/${pet.id}'),
       child: Container(
-      width: 140,
-      padding: const EdgeInsets.all(16),
+      width: 120,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: PawPartyColors.divider.withValues(alpha: 0.5)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircleAvatar(
-            radius: 36,
+            radius: 30,
             backgroundColor: PawPartyColors.primary.withValues(alpha: 0.1),
             child: pet.photoUrl != null && pet.photoUrl!.isNotEmpty
                 ? ClipOval(
                     child: PawFileOrNetworkImage(
                       path: pet.photoUrl!,
-                      width: 72,
-                      height: 72,
+                      width: 60,
+                      height: 60,
                     ),
                   )
                 : Text(
                     pet.name[0],
                     style: TextStyle(
-                      fontSize: 28,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: PawPartyColors.primary,
                     ),
                   ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           Text(
             pet.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             '${pet.meetupCount} meetups',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
@@ -498,10 +536,10 @@ class HomeScreen extends ConsumerWidget {
     return GestureDetector(
       onTap: () => context.go('/create-pet'),
       child: Container(
-        width: 140,
+        width: 120,
         decoration: BoxDecoration(
           color: PawPartyColors.primary.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: PawPartyColors.primary.withValues(alpha: 0.3),
             style: BorderStyle.solid,
@@ -511,13 +549,13 @@ class HomeScreen extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: PawPartyColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.add, size: 28, color: PawPartyColors.primary),
+              child: const Icon(Icons.add, size: 22, color: PawPartyColors.primary),
             ),
             const SizedBox(height: 12),
             Text(
@@ -550,7 +588,7 @@ class HomeScreen extends ConsumerWidget {
               ? calculatePetCompatibility(primaryPet, pet)
               : 0.0;
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: 8),
             child: PetCard(
               pet: pet,
               compatibility: compatibility,
@@ -572,7 +610,7 @@ class HomeScreen extends ConsumerWidget {
       child: Column(
         children: invites.map((invite) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: 6),
             child: _PartyInviteCard(invite: invite),
           );
         }).toList(),
@@ -625,30 +663,30 @@ class _PartyInviteCardState extends ConsumerState<_PartyInviteCard> {
     final inv = widget.invite;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.celebration, size: 20, color: PawPartyColors.primary),
-                const SizedBox(width: 8),
+                Icon(Icons.celebration, size: 18, color: PawPartyColors.primary),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     inv.meetupTitle,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
-              '${inv.hostName} invited you to their party',
-              style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+              '${inv.hostName} invited you',
+              style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -656,15 +694,25 @@ class _PartyInviteCardState extends ConsumerState<_PartyInviteCard> {
                     onPressed: _busy
                         ? null
                         : () => _respond(PartyInviteStatus.declined),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
                     child: const Text('Decline'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton(
                     onPressed: _busy
                         ? null
                         : () => _respond(PartyInviteStatus.accepted),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      textStyle: const TextStyle(fontSize: 13),
+                    ),
                     child: const Text('Accept'),
                   ),
                 ),
@@ -692,26 +740,26 @@ class _NearbyEventTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
         color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           onTap: () => context.go('/discover', extra: 2),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: PawPartyColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Center(
                     child: Text(
                       DateFormat('d').format(meetup.dateTime),
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: PawPartyColors.primary,
                       ),

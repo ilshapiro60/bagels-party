@@ -15,6 +15,7 @@ import '../models/party_invite.dart';
 import '../models/pet_buddy_owner_mute.dart';
 import '../models/pet_buddy_request.dart';
 import '../models/journal_comment.dart';
+import '../models/reaction.dart';
 import '../models/passport_entry.dart';
 import '../models/community_vet_clinic.dart';
 import '../models/neighborhood_news.dart';
@@ -27,6 +28,7 @@ import '../services/firebase_user_mapper.dart';
 import '../models/direct_message.dart';
 import '../models/party_album_item.dart';
 import '../services/firestore_party_album_repository.dart';
+import '../services/firestore_reaction_repository.dart';
 import '../services/firestore_meetup_repository.dart';
 import '../services/firestore_message_repository.dart';
 import '../services/firestore_passport_repository.dart';
@@ -763,6 +765,14 @@ final conversationsProvider = StreamProvider<List<Conversation>>((ref) {
   return FirestoreMessageRepository.watchConversations(uid);
 });
 
+/// Whether the current user has any unread messages across all conversations.
+final hasUnreadMessagesProvider = Provider<bool>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (uid == null) return false;
+  final convos = ref.watch(conversationsProvider).value ?? [];
+  return convos.any((c) => c.hasUnread(uid));
+});
+
 /// Messages for a specific conversation (chat screen).
 final messagesProvider =
     StreamProvider.family<List<DirectMessage>, String>((ref, conversationId) {
@@ -782,4 +792,11 @@ final journalCommentsProvider =
     StreamProvider.family<List<JournalComment>, String>((ref, entryId) {
   if (!isFirebaseInitialized) return Stream.value([]);
   return FirestorePassportRepository.watchComments(entryId);
+});
+
+/// Emoji reactions for any target (post ID, media URL hash, etc.).
+final reactionsProvider =
+    StreamProvider.family<List<ItemReaction>, String>((ref, targetId) {
+  if (!isFirebaseInitialized) return Stream.value([]);
+  return FirestoreReactionRepository.watchReactions(targetId);
 });

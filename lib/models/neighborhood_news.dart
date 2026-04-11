@@ -81,6 +81,7 @@ class NeighborhoodNewsPost {
     this.hidden = false,
     this.category = 'general',
     this.photoUrls = const [],
+    this.videoUrls = const [],
   });
 
   final String id;
@@ -94,6 +95,7 @@ class NeighborhoodNewsPost {
   final bool hidden;
   final String category;
   final List<String> photoUrls;
+  final List<String> videoUrls;
 
   NewsCategory get newsCategory => NewsCategory.fromId(category);
 
@@ -109,6 +111,10 @@ class NeighborhoodNewsPost {
     final photos = rawPhotos is List
         ? rawPhotos.whereType<String>().toList()
         : <String>[];
+    final rawVideos = m['videoUrls'];
+    final videos = rawVideos is List
+        ? rawVideos.whereType<String>().toList()
+        : <String>[];
     return NeighborhoodNewsPost(
       id: doc.id,
       areaKey: m['areaKey'] as String? ?? '',
@@ -121,6 +127,7 @@ class NeighborhoodNewsPost {
       hidden: m['hidden'] as bool? ?? false,
       category: m['category'] as String? ?? 'general',
       photoUrls: photos,
+      videoUrls: videos,
     );
   }
 }

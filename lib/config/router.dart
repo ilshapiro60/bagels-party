@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,6 +19,7 @@ import '../screens/passport/add_passport_entry_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/pet/pet_detail_screen.dart';
 import '../screens/chat/chat_screen.dart';
+import '../screens/chat/messenger_screen.dart';
 import '../screens/friends/friends_screen.dart';
 import '../screens/friends/friend_profile_screen.dart';
 import '../screens/meetup/invite_friends_screen.dart';
@@ -97,6 +98,13 @@ final appRouter = GoRouter(
           ),
         ),
         GoRoute(
+          path: '/neighborhood-news',
+          pageBuilder: (context, state) => NoTransitionPage(
+            key: state.pageKey,
+            child: const NeighborhoodNewsFeedScreen(),
+          ),
+        ),
+        GoRoute(
           path: '/profile',
           pageBuilder: (context, state) => NoTransitionPage(
             key: state.pageKey,
@@ -107,93 +115,121 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/community-vet-clinics',
-      builder: (context, state) => const CommunityVetClinicsScreen(),
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const CommunityVetClinicsScreen(),
+      ),
     ),
     GoRoute(
       path: '/pet/:id',
-      builder: (context, state) => PetDetailScreen(
-        petId: state.pathParameters['id']!,
+      pageBuilder: (context, state) => CupertinoPage(
+        child: PetDetailScreen(petId: state.pathParameters['id']!),
       ),
     ),
     GoRoute(
       path: '/create-pet',
-      builder: (context, state) => const CreatePetScreen(),
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const CreatePetScreen(),
+      ),
     ),
     GoRoute(
       path: '/edit-pet/:id',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.pathParameters['id']!;
         final extra = state.extra;
         final initial = extra is Pet ? extra : null;
-        return CreatePetScreen(editPetId: id, initialPet: initial);
+        return CupertinoPage(
+          child: CreatePetScreen(editPetId: id, initialPet: initial),
+        );
       },
     ),
     GoRoute(
       path: '/host',
-      builder: (context, state) => const HostMeetupScreen(),
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const HostMeetupScreen(),
+      ),
     ),
     GoRoute(
       path: '/friends',
-      builder: (context, state) => const FriendsScreen(),
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const FriendsScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/messenger',
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const MessengerScreen(),
+      ),
     ),
     GoRoute(
       path: '/friend/:friendUid',
-      builder: (context, state) => FriendProfileScreen(
-        friendUid: state.pathParameters['friendUid']!,
+      pageBuilder: (context, state) => CupertinoPage(
+        child: FriendProfileScreen(
+          friendUid: state.pathParameters['friendUid']!,
+        ),
       ),
     ),
     GoRoute(
       path: '/chat/:friendUid',
-      builder: (context, state) => ChatScreen(
-        friendUid: state.pathParameters['friendUid']!,
+      pageBuilder: (context, state) => CupertinoPage(
+        child: ChatScreen(friendUid: state.pathParameters['friendUid']!),
       ),
     ),
     GoRoute(
       path: '/invite-friends/:meetupId',
-      builder: (context, state) => InviteFriendsScreen(
-        meetupId: state.pathParameters['meetupId']!,
+      pageBuilder: (context, state) => CupertinoPage(
+        child: InviteFriendsScreen(
+          meetupId: state.pathParameters['meetupId']!,
+        ),
       ),
     ),
     GoRoute(
       path: '/party-guests/:meetupId',
-      builder: (context, state) => ManagePartyGuestsScreen(
-        meetupId: state.pathParameters['meetupId']!,
+      pageBuilder: (context, state) => CupertinoPage(
+        child: ManagePartyGuestsScreen(
+          meetupId: state.pathParameters['meetupId']!,
+        ),
       ),
     ),
     GoRoute(
       path: '/add-passport-entry',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final extra = state.extra;
         if (extra is PassportEntry) {
-          return AddPassportEntryScreen(existingEntry: extra);
+          return CupertinoPage(
+            child: AddPassportEntryScreen(existingEntry: extra),
+          );
         }
         final initialPetId = extra is String ? extra : null;
-        return AddPassportEntryScreen(initialPetId: initialPetId);
+        return CupertinoPage(
+          child: AddPassportEntryScreen(initialPetId: initialPetId),
+        );
       },
     ),
     GoRoute(
-      path: '/neighborhood-news',
-      builder: (context, state) => const NeighborhoodNewsFeedScreen(),
-    ),
-    GoRoute(
       path: '/neighborhood-news/new',
-      builder: (context, state) => const NeighborhoodNewsComposeScreen(),
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const NeighborhoodNewsComposeScreen(),
+      ),
     ),
     GoRoute(
       path: '/neighborhood-news/post/:postId',
-      builder: (context, state) {
+      pageBuilder: (context, state) {
         final id = state.pathParameters['postId']!;
         final extra = state.extra;
         final initial = extra is NeighborhoodNewsPost ? extra : null;
-        return NeighborhoodNewsPostDetailScreen(
-          postId: id,
-          initialPost: initial,
+        return CupertinoPage(
+          child: NeighborhoodNewsPostDetailScreen(
+            postId: id,
+            initialPost: initial,
+          ),
         );
       },
     ),
     GoRoute(
       path: '/moderation/neighborhood-news',
-      builder: (context, state) => const NeighborhoodNewsModerationScreen(),
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const NeighborhoodNewsModerationScreen(),
+      ),
     ),
   ],
 );

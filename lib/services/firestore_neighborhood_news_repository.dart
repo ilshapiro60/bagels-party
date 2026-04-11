@@ -35,6 +35,7 @@ class FirestoreNeighborhoodNewsRepository {
     required String body,
     String category = 'general',
     List<String> photoUrls = const [],
+    List<String> videoUrls = const [],
   }) async {
     final areaKey = UserProfile.normalizeAreaKey(author.neighborhood);
     if (areaKey.isEmpty) {
@@ -46,6 +47,7 @@ class FirestoreNeighborhoodNewsRepository {
     if (t.length > 140) throw StateError('Title is too long.');
     if (b.length > 2000) throw StateError('Post is too long (max 2000 characters).');
     if (photoUrls.length > 5) throw StateError('Maximum 5 photos per post.');
+    if (videoUrls.length > 3) throw StateError('Maximum 3 videos per post.');
 
     await _db.collection(_posts).add({
       'areaKey': areaKey,
@@ -58,6 +60,7 @@ class FirestoreNeighborhoodNewsRepository {
       'body': b,
       'category': category,
       'photoUrls': photoUrls,
+      'videoUrls': videoUrls,
       'hidden': false,
       'createdAt': FieldValue.serverTimestamp(),
     });

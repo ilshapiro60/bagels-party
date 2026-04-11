@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../config/theme.dart';
 import '../../models/neighborhood_news.dart';
@@ -9,6 +10,7 @@ import '../../providers/app_providers.dart';
 import '../../services/firestore_neighborhood_news_repository.dart';
 import '../../widgets/newsletter_ad_widget.dart';
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/reaction_bar.dart';
 
 class NeighborhoodNewsFeedScreen extends ConsumerStatefulWidget {
   const NeighborhoodNewsFeedScreen({super.key});
@@ -30,11 +32,9 @@ class _NeighborhoodNewsFeedScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Area newsletter'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new),
-          onPressed: () => context.pop(),
-        ),
+        title: const Text('Area newsletter', style: TextStyle(fontSize: 18)),
+        automaticallyImplyLeading: false,
+        toolbarHeight: 48,
       ),
       body: user == null
           ? const SizedBox.shrink()
@@ -120,12 +120,8 @@ class _NeighborhoodNewsFeedScreenState
                     ),
                   ],
                 ),
-      floatingActionButton: user != null && user.neighborhoodKey.isNotEmpty
-          ? FloatingActionButton.extended(
-              onPressed: () => context.push('/neighborhood-news/new'),
-              icon: const Icon(Icons.edit_note),
-              label: const Text('Post'),
-            )
+      bottomNavigationBar: user != null && user.neighborhoodKey.isNotEmpty
+          ? _buildActionPanel(context)
           : null,
     );
   }
@@ -161,10 +157,10 @@ class _NeighborhoodNewsFeedScreenState
 
   Widget _buildFilterChips() {
     return SizedBox(
-      height: 48,
+      height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         itemCount: NewsCategory.all.length + 1,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
@@ -203,6 +199,334 @@ class _NeighborhoodNewsFeedScreenState
             visualDensity: VisualDensity.compact,
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildActionPanel(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: PawPartyColors.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _actionButton(
+                icon: Icons.add,
+                label: 'Post',
+                onTap: () => context.push('/neighborhood-news/new'),
+              ),
+              _actionButton(
+                icon: Icons.photo_library_outlined,
+                label: 'Photos',
+                onTap: () => _openMediaReel(context, filterVideo: false),
+              ),
+              _actionButton(
+                icon: Icons.videocam_outlined,
+                label: 'Videos',
+                onTap: () => _openMediaReel(context, filterVideo: true),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: PawPartyColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: PawPartyColors.primary, size: 18),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: PawPartyColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const _videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'];
+
+  static bool _isVideoUrl(String url) {
+    final lower = url.split('?').first.toLowerCase();
+    return _videoExtensions.any((ext) => lower.endsWith(ext));
+  }
+
+  void _openMediaReel(BuildContext context, {required bool filterVideo}) {
+    final postsAsync = ref.read(neighborhoodNewsPostsProvider);
+    final posts = postsAsync.value ?? [];
+
+    final allUrls = <String>[];
+    for (final p in posts) {
+      allUrls.addAll(p.photoUrls);
+      allUrls.addAll(p.videoUrls);
+    }
+
+    final filtered = filterVideo
+        ? allUrls.where(_isVideoUrl).toList()
+        : allUrls.where((u) => !_isVideoUrl(u)).toList();
+
+    if (filtered.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(filterVideo
+              ? 'No videos in the newsletter yet.'
+              : 'No photos in the newsletter yet.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullScreenMediaViewer(
+          urls: filtered,
+          initialIndex: 0,
+          isVideo: filterVideo,
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-screen media viewer.
+/// Vertical swipe moves between items of the same type.
+/// Horizontal swipe right returns to the previous screen.
+class _FullScreenMediaViewer extends ConsumerStatefulWidget {
+  const _FullScreenMediaViewer({
+    required this.urls,
+    required this.initialIndex,
+    this.isVideo = false,
+  });
+
+  final List<String> urls;
+  final int initialIndex;
+  final bool isVideo;
+
+  @override
+  ConsumerState<_FullScreenMediaViewer> createState() => _FullScreenMediaViewerState();
+}
+
+class _FullScreenMediaViewerState extends ConsumerState<_FullScreenMediaViewer> {
+  late final PageController _pageController;
+  late int _currentPage;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentPage = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final topPad = MediaQuery.of(context).padding.top;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+            Navigator.of(context).pop();
+          }
+        },
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              scrollDirection: Axis.vertical,
+              itemCount: widget.urls.length,
+              onPageChanged: (i) => setState(() => _currentPage = i),
+              itemBuilder: (context, i) {
+                if (widget.isVideo) {
+                  return _VideoPage(
+                    url: widget.urls[i],
+                    autoPlay: i == _currentPage,
+                  );
+                }
+                return Center(
+                  child: InteractiveViewer(
+                    child: Image.network(
+                      widget.urls[i],
+                      fit: BoxFit.contain,
+                      loadingBuilder: (_, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(color: Colors.white38),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              top: topPad + 8,
+              left: 8,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+            Positioned(
+              top: topPad + 16,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${_currentPage + 1} / ${widget.urls.length}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: MediaQuery.of(context).padding.bottom + 60,
+              left: 16,
+              right: 16,
+              child: ReactionBar(
+                targetId: 'media_${widget.urls[_currentPage].hashCode}',
+                dark: true,
+              ),
+            ),
+            if (_currentPage < widget.urls.length - 1)
+              Positioned(
+                bottom: MediaQuery.of(context).padding.bottom + 24,
+                left: 0,
+                right: 0,
+                child: const Center(
+                  child: Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Colors.white38,
+                    size: 32,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoPage extends StatefulWidget {
+  const _VideoPage({required this.url, required this.autoPlay});
+  final String url;
+  final bool autoPlay;
+
+  @override
+  State<_VideoPage> createState() => _VideoPageState();
+}
+
+class _VideoPageState extends State<_VideoPage> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() => _initialized = true);
+        if (widget.autoPlay) _controller.play();
+      }).catchError((_) {
+        if (mounted) setState(() => _hasError = true);
+      });
+    _controller.setLooping(true);
+  }
+
+  @override
+  void didUpdateWidget(_VideoPage old) {
+    super.didUpdateWidget(old);
+    if (widget.autoPlay && _initialized) {
+      _controller.play();
+    } else {
+      _controller.pause();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError) {
+      return const Center(
+        child: Icon(Icons.error_outline, color: Colors.white38, size: 48),
+      );
+    }
+    if (!_initialized) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white38),
+      );
+    }
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _controller.value.aspectRatio,
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _controller.value.isPlaying
+                  ? _controller.pause()
+                  : _controller.play();
+            });
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              VideoPlayer(_controller),
+              if (!_controller.value.isPlaying)
+                const Icon(Icons.play_arrow, color: Colors.white70, size: 64),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -258,17 +582,17 @@ class _PostCard extends StatelessWidget {
     final cat = post.newsCategory;
     return Material(
       color: PawPartyColors.surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => context.push(
           '/neighborhood-news/post/${post.id}',
           extra: post,
         ),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: PawPartyColors.divider),
           ),
           child: Column(
@@ -276,12 +600,12 @@ class _PostCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(cat.icon, size: 16, color: PawPartyColors.secondary),
-                  const SizedBox(width: 6),
+                  Icon(cat.icon, size: 14, color: PawPartyColors.secondary),
+                  const SizedBox(width: 4),
                   Text(
                     cat.label,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: PawPartyColors.secondary,
                     ),
@@ -289,59 +613,83 @@ class _PostCard extends StatelessWidget {
                   const Spacer(),
                   Text(
                     dateFormat.format(post.createdAt),
-                    style: TextStyle(fontSize: 11, color: PawPartyColors.textHint),
+                    style: TextStyle(fontSize: 10, color: PawPartyColors.textHint),
                   ),
                   if (isOwner && onDelete != null) ...[
                     const SizedBox(width: 4),
                     GestureDetector(
                       onTap: onDelete,
-                      child: Icon(Icons.delete_outline, size: 18, color: PawPartyColors.textHint),
+                      child: Icon(Icons.delete_outline, size: 16, color: PawPartyColors.textHint),
                     ),
                   ],
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 5),
               if (post.title != null && post.title!.trim().isNotEmpty) ...[
                 Text(
                   post.title!,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
               ],
               Text(
                 post.body,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: TextStyle(fontSize: 13, color: PawPartyColors.textPrimary),
               ),
-              if (post.photoUrls.isNotEmpty) ...[
-                const SizedBox(height: 10),
+              if (post.photoUrls.isNotEmpty || post.videoUrls.isNotEmpty) ...[
+                const SizedBox(height: 6),
                 SizedBox(
-                  height: 64,
+                  height: 52,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: post.photoUrls.length.clamp(0, 3),
+                    itemCount: post.photoUrls.length.clamp(0, 3) +
+                        post.videoUrls.length.clamp(0, 2),
                     separatorBuilder: (_, _) => const SizedBox(width: 6),
                     itemBuilder: (context, i) {
+                      if (i < post.photoUrls.length.clamp(0, 3)) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: SizedBox(
+                            width: 52,
+                            height: 52,
+                            child: PawFileOrNetworkImage(path: post.photoUrls[i]),
+                          ),
+                        );
+                      }
                       return ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(
-                          width: 64,
-                          height: 64,
-                          child: PawFileOrNetworkImage(path: post.photoUrls[i]),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          color: Colors.black87,
+                          child: const Icon(
+                            Icons.play_circle_outline,
+                            color: Colors.white70,
+                            size: 22,
+                          ),
                         ),
                       );
                     },
                   ),
                 ),
               ],
-              const SizedBox(height: 8),
-              Text(
-                post.authorDisplayName,
-                style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      post.authorDisplayName,
+                      style: TextStyle(fontSize: 11, color: PawPartyColors.textHint),
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 4),
+              ReactionBar(targetId: post.id),
             ],
           ),
         ),

@@ -34,7 +34,7 @@ class ExpandableMapFrame extends StatelessWidget {
           appBar: AppBar(
             title: Text(fullscreenTitle),
             leading: IconButton(
-              icon: const Icon(Icons.close),
+              icon: const Icon(Icons.arrow_back),
               tooltip: 'Back',
               onPressed: () => Navigator.pop(ctx),
             ),

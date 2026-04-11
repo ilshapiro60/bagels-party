@@ -42,37 +42,66 @@ class Conversation {
   final String id;
   final List<String> participants;
   final String? lastMessage;
+  final String? lastMessageFrom;
   final DateTime lastUpdated;
+
+  /// Per-user timestamp of when they last read the conversation.
+  /// Key = uid, value = DateTime.
+  final Map<String, DateTime> lastReadAt;
 
   const Conversation({
     required this.id,
     required this.participants,
     this.lastMessage,
+    this.lastMessageFrom,
     required this.lastUpdated,
+    this.lastReadAt = const {},
   });
 
   String otherUid(String myUid) =>
       participants.firstWhere((u) => u != myUid, orElse: () => myUid);
 
+  /// Whether the given user has unread messages.
+  bool hasUnread(String myUid) {
+    if (lastMessage == null) return false;
+    if (lastMessageFrom == myUid) return false;
+    final myRead = lastReadAt[myUid];
+    if (myRead == null) return true;
+    return lastUpdated.isAfter(myRead);
+  }
+
   Map<String, dynamic> toMap() => {
         'participants': participants,
         'lastMessage': lastMessage,
+        'lastMessageFrom': lastMessageFrom,
         'lastUpdated': lastUpdated.toIso8601String(),
       };
 
+  static DateTime _parseTs(dynamic v) {
+    if (v is String) return DateTime.parse(v);
+    if (v != null) {
+      try {
+        return (v as dynamic).toDate() as DateTime;
+      } catch (_) {}
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   factory Conversation.fromMap(String docId, Map<String, dynamic> m) {
-    final ts = m['lastUpdated'];
-    DateTime dt;
-    if (ts is String) {
-      dt = DateTime.parse(ts);
-    } else {
-      dt = (ts as dynamic).toDate() as DateTime;
+    final rawRead = m['lastReadAt'];
+    final readMap = <String, DateTime>{};
+    if (rawRead is Map) {
+      for (final entry in rawRead.entries) {
+        readMap[entry.key as String] = _parseTs(entry.value);
+      }
     }
     return Conversation(
       id: docId,
       participants: List<String>.from(m['participants'] ?? []),
       lastMessage: m['lastMessage'] as String?,
-      lastUpdated: dt,
+      lastMessageFrom: m['lastMessageFrom'] as String?,
+      lastUpdated: _parseTs(m['lastUpdated']),
+      lastReadAt: readMap,
     );
   }
 

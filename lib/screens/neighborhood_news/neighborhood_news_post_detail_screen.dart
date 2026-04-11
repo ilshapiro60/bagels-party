@@ -7,7 +7,10 @@ import '../../config/theme.dart';
 import '../../models/neighborhood_news.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firestore_neighborhood_news_repository.dart';
+import 'package:video_player/video_player.dart';
+
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/reaction_bar.dart';
 
 String? _snippetForReport(NeighborhoodNewsPost post) {
   final t = post.title?.trim();
@@ -154,10 +157,53 @@ class _NeighborhoodNewsPostDetailScreenState
     );
   }
 
+  Widget _buildVideoGallery(BuildContext context, List<String> urls) {
+    return SizedBox(
+      height: 140,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: urls.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          return GestureDetector(
+            onTap: () => _showFullscreenVideo(context, urls, i),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 180,
+                height: 140,
+                color: Colors.black87,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.play_circle_outline, color: Colors.white70, size: 44),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Video ${i + 1}',
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   void _showFullscreenPhoto(BuildContext context, List<String> urls, int initial) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => _FullscreenPhotoViewer(urls: urls, initialIndex: initial),
+      ),
+    );
+  }
+
+  void _showFullscreenVideo(BuildContext context, List<String> urls, int initial) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _FullscreenVideoViewer(urls: urls, initialIndex: initial),
       ),
     );
   }
@@ -273,12 +319,18 @@ class _NeighborhoodNewsPostDetailScreenState
                       const SizedBox(height: 16),
                       _buildPhotoGallery(context, post.photoUrls),
                     ],
+                    if (post.videoUrls.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _buildVideoGallery(context, post.videoUrls),
+                    ],
                     const SizedBox(height: 16),
                     Text(
                       '${post.authorDisplayName} · ${df.format(post.createdAt)}',
                       style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 12),
+                    ReactionBar(targetId: post.id),
+                    const SizedBox(height: 20),
                     Text('Comments', style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     commentsAsync.when(
@@ -386,6 +438,141 @@ class _NeighborhoodNewsPostDetailScreenState
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _FullscreenVideoViewer extends StatefulWidget {
+  const _FullscreenVideoViewer({required this.urls, required this.initialIndex});
+
+  final List<String> urls;
+  final int initialIndex;
+
+  @override
+  State<_FullscreenVideoViewer> createState() => _FullscreenVideoViewerState();
+}
+
+class _FullscreenVideoViewerState extends State<_FullscreenVideoViewer> {
+  late final PageController _pageController;
+  late int _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialIndex;
+    _pageController = PageController(initialPage: _current);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: widget.urls.length > 1
+            ? Text('Video ${_current + 1} / ${widget.urls.length}')
+            : const Text('Video'),
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        scrollDirection: Axis.vertical,
+        itemCount: widget.urls.length,
+        onPageChanged: (i) => setState(() => _current = i),
+        itemBuilder: (context, i) {
+          return _DetailVideoPage(
+            url: widget.urls[i],
+            autoPlay: i == _current,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DetailVideoPage extends StatefulWidget {
+  const _DetailVideoPage({required this.url, required this.autoPlay});
+  final String url;
+  final bool autoPlay;
+
+  @override
+  State<_DetailVideoPage> createState() => _DetailVideoPageState();
+}
+
+class _DetailVideoPageState extends State<_DetailVideoPage> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() => _initialized = true);
+        if (widget.autoPlay) _controller.play();
+      }).catchError((_) {
+        if (mounted) setState(() => _hasError = true);
+      });
+    _controller.setLooping(true);
+  }
+
+  @override
+  void didUpdateWidget(_DetailVideoPage old) {
+    super.didUpdateWidget(old);
+    if (widget.autoPlay && _initialized) {
+      _controller.play();
+    } else {
+      _controller.pause();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError) {
+      return const Center(
+        child: Icon(Icons.error_outline, color: Colors.white38, size: 48),
+      );
+    }
+    if (!_initialized) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white38),
+      );
+    }
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _controller.value.aspectRatio,
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _controller.value.isPlaying
+                  ? _controller.pause()
+                  : _controller.play();
+            });
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              VideoPlayer(_controller),
+              if (!_controller.value.isPlaying)
+                const Icon(Icons.play_arrow, color: Colors.white70, size: 64),
+            ],
+          ),
+        ),
       ),
     );
   }

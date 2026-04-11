@@ -97,6 +97,14 @@
         { "fieldPath": "meetupId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participants", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "lastUpdated", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

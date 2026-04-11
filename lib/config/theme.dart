@@ -54,6 +54,12 @@ class PawPartyTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       colorScheme: ColorScheme.fromSeed(
         seedColor: PawPartyColors.primary,
         primary: PawPartyColors.primary,

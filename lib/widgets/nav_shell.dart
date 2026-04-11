@@ -11,7 +11,8 @@ class NavShell extends StatelessWidget {
     final location = GoRouterState.of(context).uri.toString();
     if (location.startsWith('/discover')) return 1;
     if (location.startsWith('/passport')) return 2;
-    if (location.startsWith('/profile')) return 3;
+    if (location.startsWith('/neighborhood-news')) return 3;
+    if (location.startsWith('/profile')) return 4;
     return 0;
   }
 
@@ -34,9 +35,8 @@ class NavShell extends StatelessWidget {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _navItem(
                   context,
@@ -56,7 +56,16 @@ class NavShell extends StatelessWidget {
                   route: '/discover',
                   currentIndex: index,
                 ),
-                _hostButton(context),
+                _navItem(
+                  context,
+                  index: -1,
+                  icon: Icons.local_pizza_outlined,
+                  activeIcon: Icons.local_pizza,
+                  label: 'Host',
+                  route: '/host',
+                  currentIndex: index,
+                  isPush: true,
+                ),
                 _navItem(
                   context,
                   index: 2,
@@ -69,6 +78,15 @@ class NavShell extends StatelessWidget {
                 _navItem(
                   context,
                   index: 3,
+                  icon: Icons.forum_outlined,
+                  activeIcon: Icons.forum,
+                  label: 'News',
+                  route: '/neighborhood-news',
+                  currentIndex: index,
+                ),
+                _navItem(
+                  context,
+                  index: 4,
                   icon: Icons.person_outline,
                   activeIcon: Icons.person,
                   label: 'Profile',
@@ -91,34 +109,35 @@ class NavShell extends StatelessWidget {
     required String label,
     required String route,
     required int currentIndex,
+    bool isPush = false,
   }) {
     final isActive = index == currentIndex;
 
-    return GestureDetector(
-      onTap: () => context.go(route),
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 60,
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => isPush ? context.push(route) : context.go(route),
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               isActive ? activeIcon : icon,
-              size: 24,
+              size: 22,
               color: isActive
                   ? PawPartyColors.primary
                   : PawPartyColors.textHint,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 color: isActive
                     ? PawPartyColors.primary
                     : PawPartyColors.textHint,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -126,33 +145,4 @@ class NavShell extends StatelessWidget {
     );
   }
 
-  Widget _hostButton(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.go('/host'),
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [PawPartyColors.primary, PawPartyColors.primaryDark],
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: PawPartyColors.primary.withValues(alpha: 0.35),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.local_pizza,
-          color: Colors.white,
-          size: 26,
-        ),
-      ),
-    );
-  }
 }

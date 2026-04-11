@@ -28,7 +28,9 @@ class _NeighborhoodNewsComposeScreenState
   bool _saving = false;
   NewsCategory _selectedCategory = NewsCategory.general;
   final List<XFile> _pickedPhotos = [];
+  final List<XFile> _pickedVideos = [];
   static const _maxPhotos = 5;
+  static const _maxVideos = 3;
 
   @override
   void dispose() {
@@ -74,6 +76,40 @@ class _NeighborhoodNewsComposeScreenState
     setState(() => _pickedPhotos.removeAt(index));
   }
 
+  Future<void> _pickVideo() async {
+    final remaining = _maxVideos - _pickedVideos.length;
+    if (remaining <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum 3 videos reached.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    try {
+      final picked = await ImagePicker().pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 2),
+      );
+      if (picked == null) return;
+      setState(() => _pickedVideos.add(picked));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not pick video: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  void _removeVideo(int index) {
+    setState(() => _pickedVideos.removeAt(index));
+  }
+
   Future<void> _submit() async {
     final user = ref.read(authStateProvider).user;
     if (user == null) return;
@@ -91,12 +127,22 @@ class _NeighborhoodNewsComposeScreenState
         photoUrls.add(url);
       }
 
+      final videoUrls = <String>[];
+      for (final video in _pickedVideos) {
+        final url = await storage.uploadNewsVideo(
+          localPath: video.path,
+          postId: postId,
+        );
+        videoUrls.add(url);
+      }
+
       await FirestoreNeighborhoodNewsRepository.createPost(
         author: user,
         title: _title.text,
         body: _body.text,
         category: _selectedCategory.id,
         photoUrls: photoUrls,
+        videoUrls: videoUrls,
       );
       if (mounted) {
         context.pop();
@@ -131,7 +177,7 @@ class _NeighborhoodNewsComposeScreenState
       appBar: AppBar(
         title: const Text('New post'),
         leading: IconButton(
-          icon: const Icon(Icons.close),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
         actions: [
@@ -200,6 +246,8 @@ class _NeighborhoodNewsComposeScreenState
                     ),
                     const SizedBox(height: 16),
                     _buildPhotoSection(),
+                    const SizedBox(height: 12),
+                    _buildVideoSection(),
                   ],
                 ),
     );
@@ -277,6 +325,84 @@ class _NeighborhoodNewsComposeScreenState
                       right: 4,
                       child: GestureDetector(
                         onTap: () => _removePhoto(i),
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildVideoSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _saving ? null : _pickVideo,
+              icon: const Icon(Icons.videocam_outlined),
+              label: Text(
+                _pickedVideos.isEmpty
+                    ? 'Add video'
+                    : 'Add more (${_pickedVideos.length}/$_maxVideos)',
+              ),
+            ),
+          ],
+        ),
+        if (_pickedVideos.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 100,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _pickedVideos.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                return Stack(
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.play_circle_outline, color: Colors.white70, size: 36),
+                          const SizedBox(height: 4),
+                          Text(
+                            _pickedVideos[i].name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white54, fontSize: 9),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: () => _removeVideo(i),
                         child: Container(
                           padding: const EdgeInsets.all(2),
                           decoration: const BoxDecoration(

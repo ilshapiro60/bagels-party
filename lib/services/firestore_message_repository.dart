@@ -45,7 +45,9 @@ class FirestoreMessageRepository {
     });
     await _conversations.doc(conversationId).update({
       'lastMessage': body.length > 100 ? '${body.substring(0, 100)}…' : body,
+      'lastMessageFrom': fromUid,
       'lastUpdated': now,
+      'lastReadAt.$fromUid': now,
     });
   }
 
@@ -65,14 +67,27 @@ class FirestoreMessageRepository {
             }).toList());
   }
 
+  /// Mark a conversation as read for the given user.
+  static Future<void> markConversationRead(String conversationId, String uid) {
+    return _conversations.doc(conversationId).update({
+      'lastReadAt.$uid': FieldValue.serverTimestamp(),
+    });
+  }
+
   /// All conversations for a user, most recent first.
+  ///
+  /// Sorted in memory so we only need a single-field query (no composite index
+  /// for `participants` + `lastUpdated`). Fine for typical inbox sizes.
   static Stream<List<Conversation>> watchConversations(String uid) {
     return _conversations
         .where('participants', arrayContains: uid)
-        .orderBy('lastUpdated', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => Conversation.fromMap(d.id, d.data()))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((d) => Conversation.fromMap(d.id, d.data()))
+              .toList();
+          list.sort((a, b) => b.lastUpdated.compareTo(a.lastUpdated));
+          return list;
+        });
   }
 }

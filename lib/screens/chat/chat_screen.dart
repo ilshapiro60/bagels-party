@@ -43,6 +43,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _conversationId = convId;
         _initializing = false;
       });
+      FirestoreMessageRepository.markConversationRead(convId, myUid);
     } catch (e) {
       if (!mounted) return;
       setState(() {
