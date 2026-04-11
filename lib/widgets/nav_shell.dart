@@ -46,6 +46,7 @@ class NavShell extends StatelessWidget {
                   label: 'Home',
                   route: '/home',
                   currentIndex: index,
+                  inactiveTint: PawPartyColors.primaryLight,
                 ),
                 _navItem(
                   context,
@@ -55,6 +56,7 @@ class NavShell extends StatelessWidget {
                   label: 'Discover',
                   route: '/discover',
                   currentIndex: index,
+                  inactiveTint: PawPartyColors.secondary,
                 ),
                 _navItem(
                   context,
@@ -65,6 +67,11 @@ class NavShell extends StatelessWidget {
                   route: '/host',
                   currentIndex: index,
                   isPush: true,
+                  inactiveTint: Color.lerp(
+                    PawPartyColors.pizzaGold,
+                    PawPartyColors.pawBrown,
+                    0.35,
+                  )!,
                 ),
                 _navItem(
                   context,
@@ -74,6 +81,7 @@ class NavShell extends StatelessWidget {
                   label: 'Passport',
                   route: '/passport',
                   currentIndex: index,
+                  inactiveTint: PawPartyColors.rugTeal,
                 ),
                 _navItem(
                   context,
@@ -83,6 +91,7 @@ class NavShell extends StatelessWidget {
                   label: 'News',
                   route: '/neighborhood-news',
                   currentIndex: index,
+                  inactiveTint: PawPartyColors.bloomPink,
                 ),
                 _navItem(
                   context,
@@ -92,6 +101,7 @@ class NavShell extends StatelessWidget {
                   label: 'Profile',
                   route: '/profile',
                   currentIndex: index,
+                  inactiveTint: PawPartyColors.accent,
                 ),
               ],
             ),
@@ -109,9 +119,15 @@ class NavShell extends StatelessWidget {
     required String label,
     required String route,
     required int currentIndex,
+    required Color inactiveTint,
     bool isPush = false,
   }) {
     final isActive = index == currentIndex;
+    final iconColor =
+        isActive ? PawPartyColors.primary : inactiveTint;
+    final labelColor = isActive
+        ? PawPartyColors.primary
+        : Color.lerp(inactiveTint, PawPartyColors.textSecondary, 0.45)!;
 
     return Expanded(
       child: GestureDetector(
@@ -123,9 +139,7 @@ class NavShell extends StatelessWidget {
             Icon(
               isActive ? activeIcon : icon,
               size: 22,
-              color: isActive
-                  ? PawPartyColors.primary
-                  : PawPartyColors.textHint,
+              color: iconColor,
             ),
             const SizedBox(height: 2),
             Text(
@@ -133,9 +147,7 @@ class NavShell extends StatelessWidget {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive
-                    ? PawPartyColors.primary
-                    : PawPartyColors.textHint,
+                color: labelColor,
               ),
               overflow: TextOverflow.ellipsis,
             ),

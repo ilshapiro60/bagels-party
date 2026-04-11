@@ -291,7 +291,9 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      // Step 0: allow route pop so Cupertino edge swipe-back exits Host flow.
+      // Steps 1–2: block pop and step back inside the wizard instead.
+      canPop: _currentStep == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _previousStep();
@@ -355,19 +357,24 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
 
   Widget _buildStep1Details() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Event Details', style: Theme.of(context).textTheme.headlineLarge)
-              .animate()
-              .fadeIn(duration: 400.ms),
-          const SizedBox(height: 8),
+          Text(
+            'Event Details',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ).animate().fadeIn(duration: 400.ms),
+          const SizedBox(height: 4),
           Text(
             'Set up your party',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: PawPartyColors.textSecondary,
+                ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           TextFormField(
             controller: _titleController,
             textCapitalization: TextCapitalization.words,
@@ -375,30 +382,63 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
               labelText: 'Party Title',
               hintText: 'e.g., Sunday Afternoon Hangout',
               prefixIcon: Icon(Icons.celebration),
+              isDense: true,
             ),
           ),
-          const SizedBox(height: 16),
-          Text('Theme', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: AppConstants.eventThemes.map((theme) {
-              final isSelected = _selectedTheme == theme;
-              return ChoiceChip(
-                label: Text(theme),
-                selected: isSelected,
-                onSelected: (_) => setState(() => _selectedTheme = theme),
-                selectedColor: PawPartyColors.primary.withValues(alpha: 0.15),
-                labelStyle: TextStyle(
-                  color: isSelected ? PawPartyColors.primary : PawPartyColors.textSecondary,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 12,
+          const SizedBox(height: 12),
+          Text('Theme', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 6),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final w = constraints.maxWidth;
+              final cols = w >= 520 ? 3 : 2;
+              // Fixed row height (not aspect ratio) so cells match chip height — avoids huge vertical gaps.
+              final rowH = cols == 3 ? 36.0 : 40.0;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: AppConstants.eventThemes.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 4,
+                  mainAxisExtent: rowH,
                 ),
+                itemBuilder: (context, index) {
+                  final theme = AppConstants.eventThemes[index];
+                  final isSelected = _selectedTheme == theme;
+                  return Align(
+                    alignment: Alignment.center,
+                    child: ChoiceChip(
+                      label: Text(
+                        theme,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                      selected: isSelected,
+                      onSelected: (_) => setState(() => _selectedTheme = theme),
+                      selectedColor: PawPartyColors.primary.withValues(alpha: 0.15),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                      side: BorderSide(
+                        color: isSelected ? PawPartyColors.primary : PawPartyColors.divider,
+                      ),
+                      labelStyle: TextStyle(
+                        fontSize: 10.5,
+                        height: 1.1,
+                        color: isSelected ? PawPartyColors.primary : PawPartyColors.textSecondary,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  );
+                },
               );
-            }).toList(),
+            },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _descController,
             maxLines: 3,
