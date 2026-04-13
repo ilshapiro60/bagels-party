@@ -499,6 +499,12 @@ String _emailOtpFunctionsMessage(FirebaseFunctionsException e) {
     return e.message ??
         'Email is not set up on the server (missing RESEND_API_KEY or similar).';
   }
+  if (code == 'permission-denied') {
+    return 'Could not reach email sign-in (blocked). Redeploy functions with '
+        'public invoker for OTP callables, or in Firebase Console turn off '
+        'App Check enforcement for Cloud Functions until debug tokens are '
+        'registered. You can still use Google or password.';
+  }
   if (code == 'resource-exhausted' ||
       code == 'deadline-exceeded' ||
       code == 'unavailable') {

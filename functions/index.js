@@ -348,7 +348,15 @@ exports.createPaymentIntent = onCall(
 // ---------------------------------------------------------------------------
 
 exports.requestEmailSignInCode = onCall(
-  { secrets: [emailOtpHmacSecret], region: "us-central1" },
+  {
+    secrets: [emailOtpHmacSecret],
+    region: "us-central1",
+    // Pre-auth callables: Cloud Run must allow the Firebase client to invoke the URL.
+    invoker: "public",
+    // Do not require App Check here — debug builds often lack a registered token;
+    // console "enforce" for Functions would otherwise block before this handler runs.
+    enforceAppCheck: false,
+  },
   async (request) => {
     const emailRaw = request.data?.email;
     if (!isValidEmail(emailRaw)) {
@@ -417,7 +425,12 @@ exports.requestEmailSignInCode = onCall(
 );
 
 exports.verifyEmailSignInCode = onCall(
-  { secrets: [emailOtpHmacSecret], region: "us-central1" },
+  {
+    secrets: [emailOtpHmacSecret],
+    region: "us-central1",
+    invoker: "public",
+    enforceAppCheck: false,
+  },
   async (request) => {
     const emailRaw = request.data?.email;
     const codeRaw = request.data?.code;
