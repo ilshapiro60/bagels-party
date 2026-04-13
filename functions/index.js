@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret, defineString } = require("firebase-functions/params");
-const { initializeApp } = require("firebase-admin/app");
+const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getAuth } = require("firebase-admin/auth");
@@ -15,9 +15,28 @@ const resendFrom = defineString("RESEND_FROM", {
   default: "ZumiTok <onboarding@resend.dev>",
 });
 
-initializeApp();
+// Lazy-init Admin SDK so `firebase deploy` discovery does not hit the 10s timeout
+// loading user code (see https://firebase.google.com/docs/functions/tips#avoid_deployment_timeouts_during_initialization).
+function ensureAdminApp() {
+  if (getApps().length === 0) {
+    initializeApp();
+  }
+}
 
-const db = getFirestore();
+function firestore() {
+  ensureAdminApp();
+  return getFirestore();
+}
+
+function messagingAdmin() {
+  ensureAdminApp();
+  return getMessaging();
+}
+
+function authAdmin() {
+  ensureAdminApp();
+  return getAuth();
+}
 
 function normalizeEmail(email) {
   if (typeof email !== "string") return "";
@@ -70,7 +89,7 @@ async function sendSignInCodeEmail({ to, code }) {
 async function cleanupStaleTokens(uid, staleTokens) {
   if (!staleTokens.length) return;
   try {
-    await db.collection("profiles").doc(uid).update({
+    await firestore().collection("profiles").doc(uid).update({
       fcmTokens: require("firebase-admin/firestore").FieldValue.arrayRemove(staleTokens),
     });
   } catch (e) {
@@ -83,7 +102,7 @@ async function cleanupStaleTokens(uid, staleTokens) {
  * Returns silently when the user has no tokens.
  */
 async function sendToUser(uid, notification, data) {
-  const profileSnap = await db.collection("profiles").doc(uid).get();
+  const profileSnap = await firestore().collection("profiles").doc(uid).get();
   if (!profileSnap.exists) return;
 
   const tokens = profileSnap.data().fcmTokens;
@@ -95,7 +114,7 @@ async function sendToUser(uid, notification, data) {
     tokens,
   };
 
-  const response = await getMessaging().sendEachForMulticast(message);
+  const response = await messagingAdmin().sendEachForMulticast(message);
 
   const stale = [];
   response.responses.forEach((resp, idx) => {
@@ -123,7 +142,7 @@ exports.onBuddyRequestCreated = onDocumentCreated(
     const { fromOwnerId, toOwnerId } = data;
     if (!fromOwnerId || !toOwnerId) return;
 
-    const senderSnap = await db.collection("profiles").doc(fromOwnerId).get();
+    const senderSnap = await firestore().collection("profiles").doc(fromOwnerId).get();
     const senderName = senderSnap.exists
       ? senderSnap.data().displayName || "Someone"
       : "Someone";
@@ -156,7 +175,7 @@ exports.onBuddyRequestUpdated = onDocumentUpdated(
       const { fromOwnerId, toOwnerId } = after;
       if (!fromOwnerId || !toOwnerId) return;
 
-      const accepterSnap = await db.collection("profiles").doc(toOwnerId).get();
+      const accepterSnap = await firestore().collection("profiles").doc(toOwnerId).get();
       const accepterName = accepterSnap.exists
         ? accepterSnap.data().displayName || "A pet parent"
         : "A pet parent";
@@ -188,7 +207,7 @@ exports.onDirectMessageCreated = onDocumentCreated(
     const { fromUid, body, isShout } = data;
     if (!fromUid || !body) return;
 
-    const convSnap = await db
+    const convSnap = await firestore()
       .collection("conversations")
       .doc(event.params.conversationId)
       .get();
@@ -198,7 +217,7 @@ exports.onDirectMessageCreated = onDocumentCreated(
     const recipientUids = participants.filter((uid) => uid !== fromUid);
     if (recipientUids.length === 0) return;
 
-    const senderSnap = await db.collection("profiles").doc(fromUid).get();
+    const senderSnap = await firestore().collection("profiles").doc(fromUid).get();
     const senderName = senderSnap.exists
       ? senderSnap.data().displayName || "A friend"
       : "A friend";
@@ -234,7 +253,7 @@ exports.onPartyInviteCreated = onDocumentCreated(
     const { hostId, guestId, meetupTitle } = data;
     if (!hostId || !guestId) return;
 
-    const hostSnap = await db.collection("profiles").doc(hostId).get();
+    const hostSnap = await firestore().collection("profiles").doc(hostId).get();
     const hostName = hostSnap.exists
       ? hostSnap.data().displayName || "Someone"
       : "Someone";
@@ -269,7 +288,7 @@ exports.onPartyInviteUpdated = onDocumentUpdated(
       const { hostId, guestId, meetupTitle } = after;
       if (!hostId || !guestId) return;
 
-      const guestSnap = await db.collection("profiles").doc(guestId).get();
+      const guestSnap = await firestore().collection("profiles").doc(guestId).get();
       const guestName = guestSnap.exists
         ? guestSnap.data().displayName || "A friend"
         : "A friend";
@@ -363,7 +382,7 @@ exports.requestEmailSignInCode = onCall(
       throw new HttpsError("invalid-argument", "Enter a valid email address.");
     }
     const email = normalizeEmail(emailRaw);
-    const docRef = db.collection("emailSignInCodes").doc(email);
+    const docRef = firestore().collection("emailSignInCodes").doc(email);
     const now = Date.now();
     const snap = await docRef.get();
     const d = snap.exists ? snap.data() : {};
@@ -439,7 +458,7 @@ exports.verifyEmailSignInCode = onCall(
       throw new HttpsError("invalid-argument", "Enter your email and the 6-digit code.");
     }
     const email = normalizeEmail(emailRaw);
-    const docRef = db.collection("emailSignInCodes").doc(email);
+    const docRef = firestore().collection("emailSignInCodes").doc(email);
     const snap = await docRef.get();
     if (!snap.exists) {
       throw new HttpsError("not-found", "No active code for this email. Request a new one.");
@@ -465,7 +484,7 @@ exports.verifyEmailSignInCode = onCall(
 
     await docRef.delete();
 
-    const auth = getAuth();
+    const auth = authAdmin();
     let userRecord;
     try {
       userRecord = await auth.getUserByEmail(email);
