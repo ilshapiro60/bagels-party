@@ -162,9 +162,9 @@ workflows:
       cache_paths:
         - $HOME/.pub-cache
         - $HOME/.gradle/caches
-    triggering:
-      events:
-        - workflow_dispatch
+    # No `triggering` block — Codemagic only allows push/pull_request/tag here
+    # (see https://docs.codemagic.io/yaml-running-builds/starting-builds-automatically/).
+    # Omitting triggering means this workflow runs only when you start a build in the UI.
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
