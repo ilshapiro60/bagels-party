@@ -12,7 +12,7 @@ class PawPartyHeroBanner extends StatelessWidget {
     super.key,
     this.height = 200,
     this.borderRadius,
-    this.imageAlignment = const Alignment(0, -0.78),
+    this.imageAlignment = Alignment.center,
   });
 
   final double height;
@@ -36,7 +36,7 @@ class PawPartyHeroBanner extends StatelessWidget {
           children: [
             Image.asset(
               PawPartyAssets.homeHeroPets,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               alignment: imageAlignment,
               cacheWidth: decodeW,
               errorBuilder: (context, error, stackTrace) => ColoredBox(

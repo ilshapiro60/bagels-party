@@ -1,5 +1,5 @@
 class AppConstants {
-  static const String appName = 'Bagel\'s Party';
+  static const String appName = 'ZumiTok';
   static const String appTagline = 'Where Paws Meet Pizza';
   static const double defaultRadius = 5.0; // miles
   static const int maxFreeHostings = 3;

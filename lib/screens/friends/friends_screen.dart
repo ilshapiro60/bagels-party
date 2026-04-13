@@ -12,6 +12,7 @@ import '../../services/firestore_pet_buddy_repository.dart';
 import '../../services/firestore_pet_repository.dart';
 import '../../services/firestore_profile_repository.dart';
 import '../../services/profile_persistence.dart';
+import '../../widgets/friend_owner_chip.dart';
 
 String _firebaseErrorSnackText(Object e) {
   if (e is FirebaseException) {
@@ -178,6 +179,34 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
               icon: const Icon(Icons.explore_outlined, size: 18),
               label: const Text('Find new friends on Discover'),
             ),
+            const SizedBox(height: 20),
+
+            // --- Connected friends (same list as Home) ---
+            Text('Your friends', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Parents you are connected with. Tap a photo or name to open their profile.',
+              style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            if (user == null || user.friendUids.isEmpty)
+              Text(
+                'No friends yet — send paw buddy requests from Discover.',
+                style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+              )
+            else
+              SizedBox(
+                height: 72,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: user.friendUids.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (context, i) => FriendOwnerChip(
+                        uid: user.friendUids[i],
+                        openFullscreenOnAvatarTap: false,
+                      ),
+                ),
+              ),
             const SizedBox(height: 20),
 
             // --- Incoming pet buddy requests ---

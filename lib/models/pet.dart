@@ -97,6 +97,22 @@ class Pet {
     return 'Social Butterfly';
   }
 
+  /// Profile photo plus [photoGallery], deduplicated — for fullscreen viewers.
+  List<String> get photoUrlsForViewer {
+    final out = <String>[];
+    void add(String? u) {
+      final t = u?.trim();
+      if (t == null || t.isEmpty) return;
+      if (!out.contains(t)) out.add(t);
+    }
+
+    add(photoUrl);
+    for (final g in photoGallery) {
+      add(g);
+    }
+    return out;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

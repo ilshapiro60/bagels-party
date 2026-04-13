@@ -9,10 +9,34 @@ class FirestoreMessageRepository {
   static CollectionReference<Map<String, dynamic>> get _conversations =>
       _db.collection('conversations');
 
+  /// Messages older than this are not loaded and may be pruned from Firestore.
+  static const Duration messageRetention = Duration(days: 30);
+
+  static const int maxMediaUrlsPerMessage = 6;
+
   static String _iso(dynamic v) {
     if (v is Timestamp) return v.toDate().toIso8601String();
     if (v is String) return v;
     return DateTime.now().toIso8601String();
+  }
+
+  static Timestamp _retentionCutoffTimestamp() {
+    return Timestamp.fromDate(
+      DateTime.now().subtract(messageRetention),
+    );
+  }
+
+  static String _lastMessagePreview(String body, List<String> media) {
+    final t = body.trim();
+    if (media.isNotEmpty) {
+      if (t.isNotEmpty) {
+        final snippet = t.length > 70 ? '${t.substring(0, 70)}…' : t;
+        return '📷 $snippet';
+      }
+      return '📷 Photo';
+    }
+    if (t.isEmpty) return '';
+    return t.length > 100 ? '${t.substring(0, 100)}…' : t;
   }
 
   /// Ensures a conversation doc exists for two users; returns the doc ID.
@@ -32,30 +56,61 @@ class FirestoreMessageRepository {
     required String fromUid,
     required String body,
     bool isShout = false,
+    List<String> mediaUrls = const [],
   }) async {
+    final trimmed = body.trim();
+    final media = mediaUrls
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .take(maxMediaUrlsPerMessage)
+        .toList();
+    if (trimmed.isEmpty && media.isEmpty) {
+      throw ArgumentError('Message must include text and/or media.');
+    }
+
     final msgRef = _conversations.doc(conversationId).collection('messages').doc();
     final now = FieldValue.serverTimestamp();
     await msgRef.set({
       'id': msgRef.id,
       'conversationId': conversationId,
       'fromUid': fromUid,
-      'body': body,
+      'body': trimmed,
       'createdAt': now,
       'isShout': isShout,
+      'mediaUrls': media,
     });
+    final preview = _lastMessagePreview(trimmed, media);
     await _conversations.doc(conversationId).update({
-      'lastMessage': body.length > 100 ? '${body.substring(0, 100)}…' : body,
+      'lastMessage': preview,
       'lastMessageFrom': fromUid,
       'lastUpdated': now,
       'lastReadAt.$fromUid': now,
     });
   }
 
+  /// Deletes message docs older than [messageRetention] (best-effort batches).
+  static Future<void> pruneExpiredMessages(String conversationId) async {
+    final cutoff = _retentionCutoffTimestamp();
+    final col = _conversations.doc(conversationId).collection('messages');
+    for (var round = 0; round < 10; round++) {
+      final snap = await col.where('createdAt', isLessThan: cutoff).limit(25).get();
+      if (snap.docs.isEmpty) return;
+      final batch = _db.batch();
+      for (final d in snap.docs) {
+        batch.delete(d.reference);
+      }
+      await batch.commit();
+    }
+  }
+
   /// Stream of messages in a conversation, newest last (for chat scroll).
+  /// Only includes messages from the last [messageRetention] window.
   static Stream<List<DirectMessage>> watchMessages(String conversationId) {
+    final cutoff = _retentionCutoffTimestamp();
     return _conversations
         .doc(conversationId)
         .collection('messages')
+        .where('createdAt', isGreaterThan: cutoff)
         .orderBy('createdAt', descending: false)
         .snapshots()
         .map((snap) => snap.docs.map((d) {

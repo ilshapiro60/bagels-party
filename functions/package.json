@@ -1,6 +1,6 @@
 {
   "name": "paw-party-functions",
-  "description": "Cloud Functions for PawParty push notifications",
+  "description": "Cloud Functions for ZumiTok push notifications",
   "engines": {
     "node": "22"
   },

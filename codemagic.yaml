@@ -1,32 +1,67 @@
-# Paw Party (Flutter) — Codemagic iOS → TestFlight (Apple Developer required).
+# ZumiTok (Flutter) — Codemagic
 #
-# Repository: commit `codemagic.yaml` at the Flutter project root, then add this repo in Codemagic
-# and select workflow "iOS Release (TestFlight)".
+# Put this file at the repository root (same folder as `pubspec.yaml`), connect the repo
+# in Codemagic, then enable the workflows you want.
 #
-# One-time setup:
+# ── pull-request-checks (Linux) ─────────────────────────────────────────────
+# No Apple or Play credentials. Runs on pull requests (and optional push; see triggering).
+# Codemagic: create an app from this repo → Codemagic picks up `codemagic.yaml` workflows.
+#
+# ── iOS Release (TestFlight) ────────────────────────────────────────────────
+# Apple Developer + App Store Connect API key required.
+#
+# One-time setup (iOS):
 # 1. App Store Connect: app record with bundle ID com.pawparty.pawParty (matches Xcode + Firebase).
 # 2. App Store Connect → Users and Access → Integrations → App Store Connect API → key with App Manager. Download .p8 once.
-# 3. Codemagic → Teams → Personal Account → Integrations → Developer Portal / App Store Connect → add the API key.
-# 4. Set `integrations.app_store_connect` below to that integration’s exact name (replace `codemagic` if different).
-# 5. Codemagic → bagels-party → Environment variables → group `app_store` (all required):
+# 3. Codemagic → Integrations → Developer Portal / App Store Connect → add the API key.
+# 4. Set `integrations.app_store_connect` on workflow `ios-release` to that integration’s exact name (replace `codemagic` if different).
+# 5. Codemagic → your application → Environment variables → group `app_store` (all required):
 #    - APP_STORE_APPLE_ID = numeric Apple ID (App Store Connect → app → General → Apple ID).
-#      Needed for get-latest-app-store-build-number in the build script; without it, build numbers fall back to pubspec +N only.
+#      Needed for get-latest-app-store-build-number; without it, build numbers fall back to pubspec +N only.
 #    - APP_STORE_CONNECT_ISSUER_ID = Issuer ID (Users and Access → Integrations → App Store Connect API).
 #    - APP_STORE_CONNECT_KEY_IDENTIFIER = Key ID for the API key (e.g. Z5Z3VMM7Y5).
 #    - APP_STORE_CONNECT_PRIVATE_KEY = full contents of the AuthKey_xxx.p8 file (Secret), including
 #      -----BEGIN PRIVATE KEY----- / END lines. Fixes 401 publishing if UI “integration” auth fails.
-# 6. Signing: Codemagic → Teams → Code signing identities → iOS, or let the workflow fetch profiles via the same API key
+# 6. Signing: Codemagic → Code signing identities → iOS, or use automatic signing via the same API key
 #    (see https://docs.codemagic.io/yaml-code-signing/signing-ios/ ).
-# 7. Places (vet map picker): uses the native Places SDK — same API key as Maps (GMSApiKey in Info.plist).
-#    No extra env var needed; just ensure Places API (New) is enabled on that key in Google Cloud.
+# 7. Places (vet map picker): native Places SDK — same API key as Maps (GMSApiKey in Info.plist).
+#    Enable Places API (New) on that key in Google Cloud.
 #
-# Versioning: `flutter build ipa` uses `version:` from pubspec.yaml (part before +) as CFBundleShortVersionString;
-# iOS build number (CFBundleVersion) = latest App Store Connect build + 1 (or 1 if none yet).
+# Versioning (iOS): `flutter build ipa` uses `version:` from pubspec.yaml (part before +) as CFBundleShortVersionString;
+# iOS build number (CFBundleVersion) = latest App Store Connect build + 1 (or pubspec +N floor).
 #
 # TestFlight: Internal testing — add testers under Users and Access, then TestFlight → Internal Testing → enable the build.
 # External testing requires Beta App Review for the first build.
 
 workflows:
+  pull-request-checks:
+    name: PR checks (analyze, test, Android APK)
+    max_build_duration: 45
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+        - $HOME/.gradle/caches
+    triggering:
+      cancel_previous_builds: true
+      events:
+        - pull_request
+      branch_patterns:
+        - pattern: '*'
+          include: true
+          source: true
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Flutter analyze
+        script: flutter analyze
+      - name: Flutter test
+        script: flutter test
+      - name: Android release APK (compile smoke; debug signing from app/build.gradle.kts)
+        script: flutter build apk --release
+
   ios-release:
     name: iOS Release (TestFlight)
     max_build_duration: 120
@@ -42,7 +77,12 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+        - $HOME/Library/Caches/CocoaPods
     triggering:
+      cancel_previous_builds: true
       events:
         - push
         - tag
@@ -55,6 +95,8 @@ workflows:
         script: flutter pub get
       - name: Flutter analyze
         script: flutter analyze
+      - name: Flutter test
+        script: flutter test
       - name: Install CocoaPods dependencies
         script: cd ios && pod install
       - name: Set up code signing settings on Xcode project

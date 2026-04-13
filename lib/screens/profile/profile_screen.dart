@@ -23,17 +23,33 @@ class ProfileScreen extends ConsumerWidget {
 
     if (user == null) return const SizedBox.shrink();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: 'Profile settings',
-            onPressed: () => _openProfileSettings(context, ref, user),
-          ),
-        ],
-      ),
+    final canPop = context.canPop();
+
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (context.mounted) context.go('/home');
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: canPop
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back',
+                  onPressed: () => context.go('/home'),
+                ),
+          automaticallyImplyLeading: canPop,
+          title: const Text('Profile'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Profile settings',
+              onPressed: () => _openProfileSettings(context, ref, user),
+            ),
+          ],
+        ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -56,6 +72,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 32),
           ],
         ),
+      ),
       ),
     );
   }
@@ -434,13 +451,20 @@ class ProfileScreen extends ConsumerWidget {
           'Neighborhood posts & comments',
           () => context.push('/neighborhood-news'),
         ),
-        if (user.isModerator)
+        if (user.isModerator) ...[
           _menuItem(
             Icons.flag_outlined,
             'Moderation — newsletter',
             'Pending reports queue',
             () => context.push('/moderation/neighborhood-news'),
           ),
+          _menuItem(
+            Icons.report_outlined,
+            'Moderation — messages',
+            'Private chat conduct reports',
+            () => context.push('/moderation/chat-safety'),
+          ),
+        ],
         _menuItem(
           Icons.child_care,
           'Children in Household',

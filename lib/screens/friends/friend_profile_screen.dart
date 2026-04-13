@@ -4,11 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 import '../../models/pet.dart';
+import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firestore_pet_buddy_repository.dart';
 import '../../services/firestore_pet_repository.dart';
 import '../../services/firestore_profile_repository.dart';
 import '../../services/profile_persistence.dart';
+import '../../widgets/paw_file_image.dart';
+import '../../widgets/paw_fullscreen_photo_viewer.dart';
 
 class FriendProfileScreen extends ConsumerStatefulWidget {
   const FriendProfileScreen({super.key, required this.friendUid});
@@ -76,7 +79,8 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
         title: const Text('Block this person?'),
         content: const Text(
           'This will remove your connection, break any paw buddy links between your pets, '
-          'and prevent either of you from sending new buddy requests until someone unblocks.',
+          'stop new buddy requests, and stop both of you from sending direct messages '
+          'until someone unblocks under Friends.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -159,20 +163,7 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
             padding: const EdgeInsets.all(20),
             children: [
               Center(
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundImage: profile.photoUrl != null
-                      ? NetworkImage(profile.photoUrl!)
-                      : null,
-                  child: profile.photoUrl == null
-                      ? Text(
-                          profile.displayName.isNotEmpty
-                              ? profile.displayName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(fontSize: 32),
-                        )
-                      : null,
-                ),
+                child: _FriendOwnerHeaderAvatar(profile: profile),
               ),
               const SizedBox(height: 12),
               Center(
@@ -266,6 +257,48 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
   }
 }
 
+class _FriendOwnerHeaderAvatar extends StatelessWidget {
+  const _FriendOwnerHeaderAvatar({required this.profile});
+
+  final UserProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = profile.ownerPhotoUrlsForViewer;
+    final thumb = profile.photoUrl != null && profile.photoUrl!.trim().isNotEmpty
+        ? profile.photoUrl!.trim()
+        : (urls.isNotEmpty ? urls.first : null);
+
+    final avatar = CircleAvatar(
+      radius: 48,
+      backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
+      child: thumb != null
+          ? ClipOval(
+              child: PawFileOrNetworkImage(
+                path: thumb,
+                width: 96,
+                height: 96,
+              ),
+            )
+          : Text(
+              profile.displayName.isNotEmpty
+                  ? profile.displayName[0].toUpperCase()
+                  : '?',
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w600),
+            ),
+    );
+
+    if (urls.isEmpty) {
+      return avatar;
+    }
+
+    return GestureDetector(
+      onTap: () => showPawFullscreenPhotos(context, urls: urls),
+      child: avatar,
+    );
+  }
+}
+
 class _PetTile extends StatelessWidget {
   const _PetTile({required this.pet});
 
@@ -273,44 +306,73 @@ class _PetTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final photoUrls = pet.photoUrlsForViewer;
+    final thumb = pet.photoUrl != null && pet.photoUrl!.trim().isNotEmpty
+        ? pet.photoUrl!.trim()
+        : (photoUrls.isNotEmpty ? photoUrls.first : null);
+
+    final avatar = CircleAvatar(
+      radius: 24,
+      backgroundColor: PawPartyColors.primary.withValues(alpha: 0.1),
+      child: thumb != null
+          ? ClipOval(
+              child: PawFileOrNetworkImage(
+                path: thumb,
+                width: 48,
+                height: 48,
+              ),
+            )
+          : const Icon(Icons.pets, size: 20, color: PawPartyColors.primary),
+    );
+
+    final avatarTap = photoUrls.isNotEmpty
+        ? () => showPawFullscreenPhotos(context, urls: photoUrls)
+        : () => context.push('/pet/${pet.id}');
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => context.push('/pet/${pet.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundImage: pet.photoUrl != null && pet.photoUrl!.isNotEmpty
-                    ? NetworkImage(pet.photoUrl!)
-                    : null,
-                child: pet.photoUrl == null || pet.photoUrl!.isEmpty
-                    ? const Icon(Icons.pets, size: 20)
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      pet.name,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [pet.breed, pet.type].where((s) => s != null && s.isNotEmpty).join(' \u2022 '),
-                      style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
-                    ),
-                  ],
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: avatarTap,
+              child: avatar,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => context.push('/pet/${pet.id}'),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pet.name,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              [pet.breed, pet.type].where((s) => s != null && s.isNotEmpty).join(' \u2022 '),
+                              style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, size: 20, color: PawPartyColors.textHint),
+                    ],
+                  ),
                 ),
               ),
-              Icon(Icons.chevron_right, size: 20, color: PawPartyColors.textHint),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

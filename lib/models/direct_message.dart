@@ -9,6 +9,9 @@ class DirectMessage {
   /// True if this is a broadcast "shout" rather than a 1:1 message.
   final bool isShout;
 
+  /// Image (or other) URLs uploaded with the message; max enforced when sending.
+  final List<String> mediaUrls;
+
   const DirectMessage({
     required this.id,
     required this.conversationId,
@@ -16,6 +19,7 @@ class DirectMessage {
     required this.body,
     required this.createdAt,
     this.isShout = false,
+    this.mediaUrls = const [],
   });
 
   Map<String, dynamic> toMap() => {
@@ -25,15 +29,17 @@ class DirectMessage {
         'body': body,
         'createdAt': createdAt.toIso8601String(),
         'isShout': isShout,
+        'mediaUrls': mediaUrls,
       };
 
   factory DirectMessage.fromMap(Map<String, dynamic> m) => DirectMessage(
         id: m['id'] as String,
         conversationId: m['conversationId'] as String,
         fromUid: m['fromUid'] as String,
-        body: m['body'] as String,
+        body: m['body'] as String? ?? '',
         createdAt: DateTime.parse(m['createdAt'] as String),
         isShout: m['isShout'] as bool? ?? false,
+        mediaUrls: List<String>.from(m['mediaUrls'] ?? const []),
       );
 }
 

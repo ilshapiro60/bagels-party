@@ -18,6 +18,7 @@ import '../models/journal_comment.dart';
 import '../models/reaction.dart';
 import '../models/passport_entry.dart';
 import '../models/community_vet_clinic.dart';
+import '../models/chat_safety_report.dart';
 import '../models/neighborhood_news.dart';
 import '../models/pet.dart';
 import '../models/user_profile.dart';
@@ -33,6 +34,7 @@ import '../services/firestore_meetup_repository.dart';
 import '../services/firestore_message_repository.dart';
 import '../services/firestore_passport_repository.dart';
 import '../services/firestore_pet_buddy_repository.dart';
+import '../services/firestore_chat_safety_repository.dart';
 import '../services/firestore_neighborhood_news_repository.dart';
 import '../services/firestore_pet_repository.dart';
 import '../services/firestore_profile_repository.dart';
@@ -628,6 +630,18 @@ final neighborhoodNewsPendingReportsProvider =
     return Stream.value([]);
   }
   return FirestoreNeighborhoodNewsRepository.watchPendingReports();
+});
+
+/// Moderator-only: pending private message / conduct reports.
+final chatSafetyPendingReportsProvider =
+    StreamProvider<List<ChatSafetyReport>>((ref) {
+  final user = ref.watch(authStateProvider).user;
+  if (user == null ||
+      !user.isModerator ||
+      !isFirebaseInitialized) {
+    return Stream.value([]);
+  }
+  return FirestoreChatSafetyRepository.watchPendingReports();
 });
 
 final neighborhoodNewsCommentsProvider = StreamProvider.family<

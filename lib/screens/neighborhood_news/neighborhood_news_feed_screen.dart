@@ -10,6 +10,7 @@ import '../../providers/app_providers.dart';
 import '../../services/firestore_neighborhood_news_repository.dart';
 import '../../widgets/newsletter_ad_widget.dart';
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/paw_video_thumbnail.dart';
 import '../../widgets/reaction_bar.dart';
 
 class NeighborhoodNewsFeedScreen extends ConsumerStatefulWidget {
@@ -39,7 +40,7 @@ class _NeighborhoodNewsFeedScreenState
       body: user == null
           ? const SizedBox.shrink()
           : user.neighborhoodKey.isEmpty
-              ? _NoNeighborhoodMessage(onOpenProfile: () => context.go('/profile'))
+              ? _NoNeighborhoodMessage(onOpenProfile: () => context.push('/profile'))
               : Column(
                   children: [
                     _buildFilterChips(),
@@ -577,6 +578,38 @@ class _PostCard extends StatelessWidget {
   final bool isOwner;
   final VoidCallback? onDelete;
 
+  Widget _mediaStrip() {
+    final photoCap = post.photoUrls.length.clamp(0, 3);
+    final videoCap = post.videoUrls.length.clamp(0, 2);
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: photoCap + videoCap,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, i) {
+          if (i < photoCap) {
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: SizedBox(
+                width: 52,
+                height: 52,
+                child: PawFileOrNetworkImage(path: post.photoUrls[i]),
+              ),
+            );
+          }
+          final vi = i - photoCap;
+          return PawVideoThumbnail(
+            videoUrl: post.videoUrls[vi],
+            width: 52,
+            height: 52,
+            borderRadius: 6,
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cat = post.newsCategory;
@@ -642,40 +675,7 @@ class _PostCard extends StatelessWidget {
               ),
               if (post.photoUrls.isNotEmpty || post.videoUrls.isNotEmpty) ...[
                 const SizedBox(height: 6),
-                SizedBox(
-                  height: 52,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: post.photoUrls.length.clamp(0, 3) +
-                        post.videoUrls.length.clamp(0, 2),
-                    separatorBuilder: (_, _) => const SizedBox(width: 6),
-                    itemBuilder: (context, i) {
-                      if (i < post.photoUrls.length.clamp(0, 3)) {
-                        return ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: SizedBox(
-                            width: 52,
-                            height: 52,
-                            child: PawFileOrNetworkImage(path: post.photoUrls[i]),
-                          ),
-                        );
-                      }
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          width: 52,
-                          height: 52,
-                          color: Colors.black87,
-                          child: const Icon(
-                            Icons.play_circle_outline,
-                            color: Colors.white70,
-                            size: 22,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                _mediaStrip(),
               ],
               const SizedBox(height: 5),
               Row(

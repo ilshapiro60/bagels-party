@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../config/theme.dart';
@@ -7,12 +9,13 @@ class NavShell extends StatelessWidget {
 
   const NavShell({super.key, required this.child});
 
+  /// Shell tab index for bottom ribbon highlight. Profile is not a tab (opens from Home header).
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
     if (location.startsWith('/discover')) return 1;
     if (location.startsWith('/passport')) return 2;
     if (location.startsWith('/neighborhood-news')) return 3;
-    if (location.startsWith('/profile')) return 4;
+    if (location.startsWith('/profile')) return -99;
     return 0;
   }
 
@@ -58,21 +61,7 @@ class NavShell extends StatelessWidget {
                   currentIndex: index,
                   inactiveTint: PawPartyColors.secondary,
                 ),
-                _navItem(
-                  context,
-                  index: -1,
-                  icon: Icons.local_pizza_outlined,
-                  activeIcon: Icons.local_pizza,
-                  label: 'Host',
-                  route: '/host',
-                  currentIndex: index,
-                  isPush: true,
-                  inactiveTint: Color.lerp(
-                    PawPartyColors.pizzaGold,
-                    PawPartyColors.pawBrown,
-                    0.35,
-                  )!,
-                ),
+                _hostNavItem(context),
                 _navItem(
                   context,
                   index: 2,
@@ -93,19 +82,120 @@ class NavShell extends StatelessWidget {
                   currentIndex: index,
                   inactiveTint: PawPartyColors.bloomPink,
                 ),
-                _navItem(
-                  context,
-                  index: 4,
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person,
-                  label: 'Profile',
-                  route: '/profile',
-                  currentIndex: index,
-                  inactiveTint: PawPartyColors.accent,
-                ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Host CTA: slightly larger than tab icons, inside a circle (gradient pizza).
+  static const double _hostCircleDiameter = 50;
+
+  Widget _hostNavItem(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => context.push('/host'),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Transform.translate(
+              offset: const Offset(0, -5),
+              child: Container(
+                width: _hostCircleDiameter,
+                height: _hostCircleDiameter,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: PawPartyColors.surface,
+                  border: Border.all(
+                    color: PawPartyColors.primary.withValues(alpha: 0.2),
+                    width: 1.25,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                    BoxShadow(
+                      color: PawPartyColors.secondary.withValues(alpha: 0.12),
+                      blurRadius: 14,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: ShaderMask(
+                  blendMode: BlendMode.srcIn,
+                  shaderCallback: (bounds) => SweepGradient(
+                    center: Alignment.center,
+                    startAngle: 0,
+                    endAngle: 2 * math.pi,
+                    tileMode: TileMode.clamp,
+                    colors: const [
+                      Color(0xFFFFF59D),
+                      Color(0xFFFFEA00),
+                      Color(0xFFFF9100),
+                      Color(0xFFFF6D00),
+                      Color(0xFFFF3D00),
+                      Color(0xFFFF1744),
+                      Color(0xFFFF4081),
+                      PawPartyColors.bloomPink,
+                      Color(0xFFE040FB),
+                      Color(0xFF7C4DFF),
+                      Color(0xFF536DFE),
+                      Color(0xFF00B0FF),
+                      Color(0xFF00E5FF),
+                      Color(0xFF1DE9B6),
+                      Color(0xFF00E676),
+                      Color(0xFF76FF03),
+                      Color(0xFFFFEA00),
+                    ],
+                    stops: const [
+                      0.0,
+                      0.06,
+                      0.12,
+                      0.2,
+                      0.28,
+                      0.36,
+                      0.44,
+                      0.52,
+                      0.58,
+                      0.64,
+                      0.7,
+                      0.76,
+                      0.82,
+                      0.88,
+                      0.93,
+                      0.97,
+                      1.0,
+                    ],
+                  ).createShader(bounds),
+                  child: const Icon(
+                    Icons.local_pizza,
+                    size: 30,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              'Host',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Color.lerp(
+                  PawPartyColors.primary,
+                  PawPartyColors.bloomPink,
+                  0.35,
+                )!,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );

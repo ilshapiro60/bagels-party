@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'config/constants.dart';
 import 'config/theme.dart';
 import 'config/router.dart';
 import 'providers/app_providers.dart';
@@ -95,14 +96,14 @@ class _PawPartyAppState extends ConsumerState<PawPartyApp> {
   Widget build(BuildContext context) {
     if (!_sessionReady) {
       return MaterialApp(
-        title: 'Bagel\'s Party',
+        title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
         theme: PawPartyTheme.lightTheme,
         home: const StartupSplash(),
       );
     }
     return MaterialApp.router(
-      title: 'Bagel\'s Party',
+      title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: PawPartyTheme.lightTheme,
       routerConfig: appRouter,

@@ -1,11 +1,11 @@
 {
-    "name": "Bagel's Party",
-    "short_name": "Bagel's Party",
+    "name": "ZumiTok",
+    "short_name": "ZumiTok",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0A0E18",
+    "theme_color": "#00ACC1",
+    "description": "ZumiTok — connect with pet parents near you.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

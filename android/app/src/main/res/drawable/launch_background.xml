@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Matches [PawPartyColors.background]; full photo + title show in Flutter [StartupSplash]. -->
+<!-- Matches Flutter [StartupSplash] background until first frame. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
-        <color android:color="#F7FAFD" />
+        <color android:color="#0A0E18" />
     </item>
 </layer-list>

@@ -18,7 +18,9 @@ import '../../services/approximate_location.dart';
 import '../../utils/pet_compatibility.dart';
 import '../../widgets/pet_card.dart';
 import '../../widgets/meetup_card.dart';
+import '../../widgets/friend_owner_chip.dart';
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/paw_fullscreen_photo_viewer.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -253,7 +255,25 @@ class HomeScreen extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
           GestureDetector(
-            onTap: () => context.go('/profile'),
+            onTap: () => context.push('/profile'),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: PawPartyColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.person_outline,
+                size: 22,
+                color: PawPartyColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () => context.push('/profile'),
             child: CircleAvatar(
               radius: 24,
               backgroundColor: PawPartyColors.primary.withValues(alpha: 0.15),
@@ -332,14 +352,14 @@ class HomeScreen extends ConsumerWidget {
               Text('Friends', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
               const Spacer(),
               if (user != null)
-                TextButton(
+                IconButton(
                   onPressed: () => _showShoutDialog(context, ref, user),
-                  style: TextButton.styleFrom(
+                  tooltip: 'Shout to friends',
+                  style: IconButton.styleFrom(
                     visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    textStyle: const TextStyle(fontSize: 13),
+                    padding: const EdgeInsets.all(8),
                   ),
-                  child: const Text('Shout'),
+                  icon: Icon(Icons.campaign_outlined, color: PawPartyColors.primary, size: 22),
                 ),
               TextButton(
                 onPressed: () => context.push('/friends'),
@@ -391,7 +411,7 @@ class HomeScreen extends ConsumerWidget {
                 itemCount: friendUids.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 10),
                 itemBuilder: (context, i) {
-                  return _FriendChip(uid: friendUids[i]);
+                  return FriendOwnerChip(uid: friendUids[i]);
                 },
               ),
             ),
@@ -464,10 +484,34 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPetMiniCard(BuildContext context, pet) {
-    return GestureDetector(
-      onTap: () => context.push('/pet/${pet.id}'),
-      child: Container(
+  Widget _buildPetMiniCard(BuildContext context, Pet pet) {
+    final photoUrls = pet.photoUrlsForViewer;
+    final thumb = pet.photoUrl != null && pet.photoUrl!.trim().isNotEmpty
+        ? pet.photoUrl!.trim()
+        : (photoUrls.isNotEmpty ? photoUrls.first : null);
+
+    final avatar = CircleAvatar(
+      radius: 30,
+      backgroundColor: PawPartyColors.primary.withValues(alpha: 0.1),
+      child: thumb != null
+          ? ClipOval(
+              child: PawFileOrNetworkImage(
+                path: thumb,
+                width: 60,
+                height: 60,
+              ),
+            )
+          : Text(
+              pet.name.isNotEmpty ? pet.name[0] : '?',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: PawPartyColors.primary,
+              ),
+            ),
+    );
+
+    return Container(
       width: 120,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -478,57 +522,56 @@ class HomeScreen extends ConsumerWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: PawPartyColors.primary.withValues(alpha: 0.1),
-            child: pet.photoUrl != null && pet.photoUrl!.isNotEmpty
-                ? ClipOval(
-                    child: PawFileOrNetworkImage(
-                      path: pet.photoUrl!,
-                      width: 60,
-                      height: 60,
-                    ),
-                  )
-                : Text(
-                    pet.name[0],
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: PawPartyColors.primary,
-                    ),
-                  ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (photoUrls.isNotEmpty) {
+                showPawFullscreenPhotos(context, urls: photoUrls);
+              } else {
+                context.push('/pet/${pet.id}');
+              }
+            },
+            child: avatar,
           ),
           const SizedBox(height: 6),
-          Text(
-            pet.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '${pet.meetupCount} meetups',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.star, size: 14, color: PawPartyColors.pizzaGold),
-              const SizedBox(width: 2),
-              Text(
-                pet.averageRating.toStringAsFixed(1),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: PawPartyColors.textPrimary,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => context.push('/pet/${pet.id}'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  pet.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  '${pet.meetupCount} meetups',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.star, size: 14, color: PawPartyColors.pizzaGold),
+                    const SizedBox(width: 2),
+                    Text(
+                      pet.averageRating.toStringAsFixed(1),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: PawPartyColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
-    ),
     );
   }
 
@@ -811,61 +854,6 @@ class _NearbyEventTile extends StatelessWidget {
     final miles = meters / 1609.34;
     if (miles < 0.3) return 'Nearby';
     return '${miles.toStringAsFixed(1)} mi';
-  }
-}
-
-class _FriendChip extends ConsumerWidget {
-  const _FriendChip({required this.uid});
-
-  final String uid;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(ownerProfileProvider(uid));
-    return async.when(
-      data: (p) => GestureDetector(
-        onTap: () => context.push('/friend/$uid'),
-        child: SizedBox(
-          width: 56,
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
-                child: p.photoUrl != null && p.photoUrl!.isNotEmpty
-                    ? ClipOval(
-                        child: PawFileOrNetworkImage(
-                          path: p.photoUrl!,
-                          width: 44,
-                          height: 44,
-                        ),
-                      )
-                    : Text(
-                        p.displayName.isNotEmpty ? p.displayName[0] : '?',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: PawPartyColors.primary,
-                        ),
-                      ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                p.displayName.split(' ').first,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      ),
-      loading: () => const SizedBox(
-        width: 56,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      ),
-      error: (_, _) => const SizedBox(width: 56),
-    );
   }
 }
 

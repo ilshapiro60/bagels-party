@@ -1,12 +1,26 @@
+import 'dart:async';
+
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../config/theme.dart';
 import '../../models/direct_message.dart';
+import '../../models/pet_buddy_owner_mute.dart';
 import '../../providers/app_providers.dart';
+import '../../services/firebase_storage_service.dart';
+import '../../services/firestore_chat_safety_repository.dart';
 import '../../services/firestore_message_repository.dart';
+import '../../services/firestore_pet_buddy_repository.dart';
+import '../../services/firestore_profile_repository.dart';
+import '../../services/local_media.dart';
+import '../../services/profile_persistence.dart';
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/paw_fullscreen_photo_viewer.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key, required this.friendUid});
@@ -23,6 +37,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String? _conversationId;
   bool _initializing = true;
   String? _initError;
+  final _pendingMediaUrls = <String>[];
+  bool _busyUpload = false;
+  bool _sending = false;
 
   @override
   void initState() {
@@ -44,28 +61,273 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _initializing = false;
       });
       FirestoreMessageRepository.markConversationRead(convId, myUid);
+      unawaited(FirestoreMessageRepository.pruneExpiredMessages(convId));
     } catch (e) {
       if (!mounted) return;
+      var msg = e.toString();
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        msg =
+            'Messaging is not available. This can happen when there is a block between accounts.';
+      }
       setState(() {
-        _initError = e.toString();
+        _initError = msg;
         _initializing = false;
       });
     }
   }
 
+  bool _isPairBlocked(String myUid, List<PetBuddyOwnerMute> mutes) {
+    final id = FirestorePetBuddyRepository.ownerMuteDocId(myUid, widget.friendUid);
+    return mutes.any((m) => m.docId == id);
+  }
+
+  Future<void> _refreshUser(String uid) async {
+    final fresh = await FirestoreProfileRepository.fetchProfile(uid);
+    if (fresh != null && mounted) {
+      final merged = await ProfilePersistence.mergeWithSaved(fresh);
+      ref.read(authStateProvider.notifier).updateUser(merged);
+    }
+  }
+
+  Future<void> _reportConversation() async {
+    final user = ref.read(authStateProvider).user;
+    final convId = _conversationId;
+    if (user == null || convId == null) return;
+    final reason = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Report conversation'),
+        content: TextField(
+          controller: reason,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'What is going wrong? (harassment, scams, inappropriate photos, etc.)',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit')),
+        ],
+      ),
+    );
+    if (submitted != true || !mounted) return;
+
+    String? snippet;
+    final msgs = ref.read(messagesProvider(convId)).maybeWhen(
+          data: (v) => v,
+          orElse: () => null,
+        );
+    if (msgs != null && msgs.isNotEmpty) {
+      final t = msgs.last.body.trim();
+      if (t.isNotEmpty) {
+        snippet = t.length > 120 ? '${t.substring(0, 120)}…' : t;
+      }
+    }
+
+    try {
+      await FirestoreChatSafetyRepository.submitReport(
+        reporter: user,
+        conversationId: convId,
+        reportedUid: widget.friendUid,
+        reason: reason.text,
+        contextSnippet: snippet,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Thanks — moderators will review.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+
+  Future<void> _blockUser() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block this person?'),
+        content: const Text(
+          'This removes your connection, breaks paw buddy links between your pets, '
+          'stops new buddy requests, and stops both of you from sending messages here '
+          'until someone unblocks from Friends.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: PawPartyColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final uid = ref.read(authStateProvider).user?.id;
+    if (uid == null) return;
+    try {
+      await FirestoreProfileRepository.removeFriend(uid: uid, friendUid: widget.friendUid);
+      await FirestorePetBuddyRepository.muteBuddyOwners(
+        actingUid: uid,
+        otherOwnerId: widget.friendUid,
+      );
+      await _refreshUser(uid);
+      ref.invalidate(petBuddyOwnerMutesProvider);
+      for (final p in ref.read(userPetsProvider)) {
+        ref.invalidate(buddyPetsForPetProvider(p.id));
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User blocked.')),
+        );
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not block: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _send() async {
+    if (_conversationId == null || _busyUpload || _sending) return;
+    final myUid = ref.read(authStateProvider).user?.id;
+    if (myUid == null) return;
+    final mutes = ref.read(petBuddyOwnerMutesProvider).maybeWhen(
+          data: (v) => v,
+          orElse: () => const <PetBuddyOwnerMute>[],
+        );
+    if (_isPairBlocked(myUid, mutes)) return;
+
     final text = _controller.text.trim();
-    if (text.isEmpty || _conversationId == null) return;
+    final media = List<String>.from(_pendingMediaUrls);
+    if (text.isEmpty && media.isEmpty) return;
+
+    final savedText = text;
+    _controller.clear();
+    setState(() {
+      _pendingMediaUrls.clear();
+      _sending = true;
+    });
+
+    try {
+      await FirestoreMessageRepository.sendMessage(
+        conversationId: _conversationId!,
+        fromUid: myUid,
+        body: savedText,
+        mediaUrls: media,
+      );
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not send: $e')),
+        );
+        setState(() {
+          _controller.text = savedText;
+          _pendingMediaUrls.addAll(media);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _addPhotoFrom(ImageSource source) async {
+    if (_conversationId == null || _busyUpload) return;
     final myUid = ref.read(authStateProvider).user?.id;
     if (myUid == null) return;
 
-    _controller.clear();
-    await FirestoreMessageRepository.sendMessage(
-      conversationId: _conversationId!,
-      fromUid: myUid,
-      body: text,
+    if (_pendingMediaUrls.length >= FirestoreMessageRepository.maxMediaUrlsPerMessage) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You can attach up to ${FirestoreMessageRepository.maxMediaUrlsPerMessage} photos per message.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _busyUpload = true);
+    try {
+      final x = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 2048,
+        imageQuality: 88,
+      );
+      if (x == null || !mounted) return;
+      final local = await persistPickedFile(x);
+      if (local == null || !mounted) return;
+
+      final objectPath =
+          'users/$myUid/messages/${_conversationId}_${const Uuid().v4()}${extensionForPath(local)}';
+      final url = await FirebaseStorageService.instance.uploadLocalPath(
+        localPath: local,
+        storageRelativePath: objectPath,
+        allowLocalFallback: false,
+      );
+      if (!mounted) return;
+      setState(() => _pendingMediaUrls.add(url));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add photo: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busyUpload = false);
+    }
+  }
+
+  String extensionForPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return '.png';
+    if (lower.endsWith('.webp')) return '.webp';
+    if (lower.endsWith('.gif')) return '.gif';
+    return '.jpg';
+  }
+
+  void _showAttachSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Photo from gallery'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _addPhotoFrom(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take photo'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _addPhotoFrom(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
     );
-    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -101,6 +363,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       error: (_, _) => null,
     );
     final myUid = ref.watch(authStateProvider).user?.id;
+    final mutesAsync = ref.watch(petBuddyOwnerMutesProvider);
+    final isDmBlocked = myUid != null &&
+        mutesAsync.maybeWhen(
+          data: (mutes) => _isPairBlocked(myUid, mutes),
+          orElse: () => false,
+        );
 
     return Scaffold(
       appBar: AppBar(
@@ -135,6 +403,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ],
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'report') _reportConversation();
+              if (v == 'block') _blockUser();
+            },
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(value: 'report', child: Text('Report…')),
+              PopupMenuItem(value: 'block', child: Text('Block user')),
+            ],
+          ),
+        ],
       ),
       body: _initializing
           ? const Center(child: CircularProgressIndicator())
@@ -173,11 +453,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                 )
               : Column(
-              children: [
-                Expanded(child: _buildMessageList(myUid)),
-                _buildInputBar(),
-              ],
-            ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+                      child: Text(
+                        'Messages are kept for ${FirestoreMessageRepository.messageRetention.inDays} days.',
+                        style: TextStyle(fontSize: 11, color: PawPartyColors.textHint),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    if (isDmBlocked)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: PawPartyColors.error.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: PawPartyColors.error.withValues(alpha: 0.35)),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            child: Text(
+                              'You have a block with this person. Messaging is disabled until '
+                              'someone removes the block under Friends → Paw buddy blocks.',
+                              style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary, height: 1.35),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Expanded(child: _buildMessageList(myUid)),
+                    _buildInputBar(isDmBlocked: isDmBlocked),
+                  ],
+                ),
     );
   }
 
@@ -194,8 +502,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Text(
-                'No messages yet — say hi!',
-                style: TextStyle(color: PawPartyColors.textSecondary),
+                'No messages yet — say hi or tap + to send a photo.\n'
+                'Only the last ${FirestoreMessageRepository.messageRetention.inDays} days are kept.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: PawPartyColors.textSecondary, height: 1.35),
               ),
             ),
           );
@@ -225,44 +535,130 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildInputBar() {
+  Widget _buildInputBar({required bool isDmBlocked}) {
+    if (isDmBlocked) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Text(
+            'Sending is turned off because of a mutual block.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    final canSend = !_busyUpload &&
+        !_sending &&
+        (_controller.text.trim().isNotEmpty || _pendingMediaUrls.isNotEmpty);
+
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
         decoration: BoxDecoration(
           color: PawPartyColors.surface,
           border: Border(top: BorderSide(color: PawPartyColors.divider)),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                textCapitalization: TextCapitalization.sentences,
-                maxLines: 4,
-                minLines: 1,
-                decoration: InputDecoration(
-                  hintText: 'Message…',
-                  filled: true,
-                  fillColor: PawPartyColors.surfaceVariant,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
+            if (_pendingMediaUrls.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, right: 4, bottom: 8),
+                child: SizedBox(
+                  height: 64,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _pendingMediaUrls.length,
+                    separatorBuilder: (_, unused) => const SizedBox(width: 8),
+                    itemBuilder: (context, i) {
+                      final u = _pendingMediaUrls[i];
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: PawFileOrNetworkImage(
+                              path: u,
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Material(
+                              color: PawPartyColors.error,
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => setState(() => _pendingMediaUrls.removeAt(i)),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(2),
+                                  child: Icon(Icons.close, size: 16, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
-                onSubmitted: (_) => _send(),
               ),
-            ),
-            const SizedBox(width: 6),
-            IconButton.filled(
-              onPressed: _send,
-              icon: const Icon(Icons.send, size: 20),
-              style: IconButton.styleFrom(
-                backgroundColor: PawPartyColors.primary,
-                foregroundColor: Colors.white,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton(
+                  tooltip: 'Add photo',
+                  onPressed: _busyUpload ? null : _showAttachSheet,
+                  icon: _busyUpload
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(Icons.add_photo_alternate_outlined,
+                          color: PawPartyColors.primary),
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLines: 4,
+                    minLines: 1,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: _pendingMediaUrls.isEmpty
+                          ? 'Message…'
+                          : 'Add a caption (optional)…',
+                      filled: true,
+                      fillColor: PawPartyColors.surfaceVariant,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (_) {
+                      if (canSend) _send();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton.filled(
+                  onPressed: canSend ? _send : null,
+                  icon: const Icon(Icons.send, size: 20),
+                  style: IconButton.styleFrom(
+                    backgroundColor: PawPartyColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -313,11 +709,15 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time = DateFormat('h:mm a').format(message.createdAt);
+    final media = message.mediaUrls;
+    final bodyText = message.body.trim();
+    final maxImgW = MediaQuery.sizeOf(context).width * 0.62;
+
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
+          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
         ),
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -357,14 +757,47 @@ class _MessageBubble extends StatelessWidget {
                   ],
                 ),
               ),
-            Text(
-              message.body,
-              style: TextStyle(
-                fontSize: 15,
-                color: isMine ? Colors.white : PawPartyColors.textPrimary,
-                height: 1.35,
+            if (media.isNotEmpty)
+              for (var i = 0; i < media.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : 6),
+                  child: GestureDetector(
+                    onTap: () => showPawFullscreenPhotos(
+                      context,
+                      urls: media,
+                      initialIndex: i,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isMine
+                                ? Colors.white24
+                                : PawPartyColors.divider,
+                          ),
+                        ),
+                        child: PawFileOrNetworkImage(
+                          path: media[i],
+                          width: maxImgW,
+                          height: 160,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            if (bodyText.isNotEmpty) ...[
+              if (media.isNotEmpty) const SizedBox(height: 8),
+              Text(
+                message.body,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isMine ? Colors.white : PawPartyColors.textPrimary,
+                  height: 1.35,
+                ),
               ),
-            ),
+            ],
             const SizedBox(height: 4),
             Text(
               time,

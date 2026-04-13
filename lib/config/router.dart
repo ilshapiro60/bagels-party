@@ -26,6 +26,7 @@ import '../screens/meetup/invite_friends_screen.dart';
 import '../screens/meetup/manage_party_guests_screen.dart';
 import '../screens/neighborhood_news/neighborhood_news_compose_screen.dart';
 import '../screens/neighborhood_news/neighborhood_news_feed_screen.dart';
+import '../screens/moderation/chat_safety_moderation_screen.dart';
 import '../screens/neighborhood_news/neighborhood_news_moderation_screen.dart';
 import '../screens/neighborhood_news/neighborhood_news_post_detail_screen.dart';
 import '../widgets/nav_shell.dart';
@@ -106,7 +107,7 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/profile',
-          pageBuilder: (context, state) => NoTransitionPage(
+          pageBuilder: (context, state) => CupertinoPage<void>(
             key: state.pageKey,
             child: const ProfileScreen(),
           ),
@@ -229,6 +230,12 @@ final appRouter = GoRouter(
       path: '/moderation/neighborhood-news',
       pageBuilder: (context, state) => CupertinoPage(
         child: const NeighborhoodNewsModerationScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/moderation/chat-safety',
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const ChatSafetyModerationScreen(),
       ),
     ),
   ],

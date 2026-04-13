@@ -10,6 +10,7 @@ import '../../services/firestore_neighborhood_news_repository.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/paw_video_thumbnail.dart';
 import '../../widgets/reaction_bar.dart';
 
 String? _snippetForReport(NeighborhoodNewsPost post) {
@@ -167,24 +168,30 @@ class _NeighborhoodNewsPostDetailScreenState
         itemBuilder: (context, i) {
           return GestureDetector(
             onTap: () => _showFullscreenVideo(context, urls, i),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 180,
-                height: 140,
-                color: Colors.black87,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.play_circle_outline, color: Colors.white70, size: 44),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Video ${i + 1}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                  ],
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                PawVideoThumbnail(
+                  videoUrl: urls[i],
+                  width: 180,
+                  height: 140,
+                  borderRadius: 12,
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    'Video ${i + 1}',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      shadows: const [
+                        Shadow(blurRadius: 6, color: Colors.black87),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
         },

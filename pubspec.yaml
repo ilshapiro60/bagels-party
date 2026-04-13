@@ -1,5 +1,5 @@
 name: paw_party
-description: "A new Flutter project."
+description: "ZumiTok — social app for pet parents."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.4.2+23
+version: 1.4.3+24
 
 environment:
   sdk: ^3.11.1
@@ -66,6 +66,7 @@ dependencies:
   flutter_stripe: ^12.5.0
   cloud_functions: ^6.1.0
   google_mobile_ads: ^5.3.0
+  video_thumbnail: ^0.5.6
 
 dev_dependencies:
   flutter_test:
@@ -122,6 +123,13 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/images/paw_party_icon_bp.png
-  adaptive_icon_background: "#1B4F8F"
-  adaptive_icon_foreground: assets/images/paw_party_icon_bp.png
+  image_path: assets/images/zumitok_logo.png
+  adaptive_icon_background: "#0A0E18"
+  adaptive_icon_foreground: assets/images/zumitok_logo.png
+  # Wide/wordmark art: inset shrinks foreground inside the mask so it is not edge-squeezed.
+  adaptive_icon_foreground_inset: 14
+  web:
+    generate: true
+    image_path: assets/images/zumitok_logo.png
+    background_color: "#0A0E18"
+    theme_color: "#00ACC1"

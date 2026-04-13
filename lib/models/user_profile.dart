@@ -69,6 +69,22 @@ class UserProfile {
 
   bool get canHostFree => hostCount < AppConstants.maxFreeHostings;
 
+  /// Profile photo + [ownerGalleryImagePaths], deduplicated — for fullscreen viewers.
+  List<String> get ownerPhotoUrlsForViewer {
+    final out = <String>[];
+    void add(String? u) {
+      final t = u?.trim();
+      if (t == null || t.isEmpty) return;
+      if (!out.contains(t)) out.add(t);
+    }
+
+    add(photoUrl);
+    for (final path in ownerGalleryImagePaths) {
+      add(path);
+    }
+    return out;
+  }
+
   /// Display name for event cards -- prefers businessName for business accounts.
   String get eventHostDisplayName =>
       isBusinessAccount && businessName != null && businessName!.trim().isNotEmpty
