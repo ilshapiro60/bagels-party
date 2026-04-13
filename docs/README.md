@@ -44,6 +44,6 @@ Optional landing: `https://<your-username>.github.io/<repository-name>/` (you ca
 
 ## Before launch
 
-- Replace **`support@zumitok.app`** in `support.html` and `privacy.html` with a working inbox (or your personal support email).
+- Support / privacy contact in the HTML is **`support@chiarezza.us`**; update both files if that address changes.
 - Update **“Who we are”** / operator name in `privacy.html` if a company name is required.
 - Align **Service providers** with the exact SDKs you ship (Stripe, AdMob, etc.).
