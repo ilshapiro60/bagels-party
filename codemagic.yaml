@@ -7,6 +7,10 @@
 # No Apple or Play credentials. Runs on pull requests (and optional push; see triggering).
 # Codemagic: create an app from this repo → Codemagic picks up `codemagic.yaml` workflows.
 #
+# ── Android App Bundle (Linux) ─────────────────────────────────────────────
+# Workflow: android-appbundle — signed .aab for Google Play Console (https://play.google.com/console/).
+# Start manually in Codemagic (https://codemagic.io/) after Android keystore reference matches YAML.
+#
 # ── iOS Release (TestFlight) ────────────────────────────────────────────────
 # Apple Developer + App Store Connect API key required.
 #
@@ -146,7 +150,7 @@ workflows:
   # Docs: https://docs.codemagic.io/flutter-code-signing/android-code-signing/
   android-appbundle:
     name: Android App Bundle (release AAB)
-    max_build_duration: 60
+    max_build_duration: 90
     instance_type: linux_x2
     environment:
       flutter: stable
@@ -154,12 +158,18 @@ workflows:
       # Upload your upload keystore (.jks / .keystore); set the reference name to match the line below.
       android_signing:
         - pawparty_android_upload
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+        - $HOME/.gradle/caches
     triggering:
       events:
         - workflow_dispatch
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
+      - name: Flutter analyze
+        script: flutter analyze
       - name: Build app bundle
         script: flutter build appbundle --release
     artifacts:
