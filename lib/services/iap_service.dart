@@ -1,5 +1,6 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+
+import '../config/cloud_functions_region.dart';
 
 /// Handles party-hosting payments via Stripe.
 ///
@@ -16,7 +17,7 @@ class IapService {
   /// or the payment fails.
   Future<bool> purchasePartyHosting(String productId) async {
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable(
+      final callable = pawPartyFirebaseFunctions().httpsCallable(
         'createPaymentIntent',
       );
 

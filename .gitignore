@@ -46,3 +46,7 @@ app.*.map.json
 
 # Accidental Flutter desktop screenshots in repo root
 /flutter_*.png
+
+# Firebase Functions params / local env (often contain API keys)
+functions/.env
+functions/.env.*

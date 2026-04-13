@@ -1,15 +1,68 @@
+const crypto = require("crypto");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
+const { defineSecret, defineString } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getAuth } = require("firebase-admin/auth");
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const emailOtpHmacSecret = defineSecret("EMAIL_OTP_HMAC_SECRET");
+/** Resend API key (https://resend.com). Empty in emulator logs the code instead. */
+const resendApiKey = defineString("RESEND_API_KEY", { default: "" });
+const resendFrom = defineString("RESEND_FROM", {
+  default: "ZumiTok <onboarding@resend.dev>",
+});
 
 initializeApp();
 
 const db = getFirestore();
+
+function normalizeEmail(email) {
+  if (typeof email !== "string") return "";
+  return email.trim().toLowerCase();
+}
+
+function isValidEmail(email) {
+  const n = normalizeEmail(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(n);
+}
+
+function hmacOtpCode(secret, email, code) {
+  return crypto.createHmac("sha256", secret).update(`${normalizeEmail(email)}:${code}`).digest("hex");
+}
+
+function randomSixDigitString() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function sendSignInCodeEmail({ to, code }) {
+  const apiKey = resendApiKey.value();
+  if (!apiKey) return false;
+  const from = resendFrom.value();
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: "Your ZumiTok sign-in code",
+      html:
+        `<p style="font-size:16px">Your sign-in code is:</p>` +
+        `<p style="font-size:28px;font-weight:700;letter-spacing:8px;font-family:monospace">${code}</p>` +
+        `<p style="color:#666;font-size:14px">It expires in 15 minutes. If you did not request this, you can ignore this email.</p>`,
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Resend ${res.status}: ${t}`);
+  }
+  return true;
+}
 
 /**
  * Removes tokens that FCM reports as invalid so future sends don't retry them.
@@ -249,7 +302,7 @@ const VALID_PRODUCTS = {
 };
 
 exports.createPaymentIntent = onCall(
-  { secrets: [stripeSecretKey] },
+  { secrets: [stripeSecretKey], region: "us-central1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Sign in to continue.");
@@ -287,5 +340,134 @@ exports.createPaymentIntent = onCall(
       ephemeralKey: ephemeralKey.secret,
       customerId: customer.id,
     };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 7. Email sign-in — 6-digit OTP (callable → Resend + custom token)
+// ---------------------------------------------------------------------------
+
+exports.requestEmailSignInCode = onCall(
+  { secrets: [emailOtpHmacSecret], region: "us-central1" },
+  async (request) => {
+    const emailRaw = request.data?.email;
+    if (!isValidEmail(emailRaw)) {
+      throw new HttpsError("invalid-argument", "Enter a valid email address.");
+    }
+    const email = normalizeEmail(emailRaw);
+    const docRef = db.collection("emailSignInCodes").doc(email);
+    const now = Date.now();
+    const snap = await docRef.get();
+    const d = snap.exists ? snap.data() : {};
+
+    const lastMs = d.lastSentAt?.toMillis?.() ?? 0;
+    if (now - lastMs < 60_000) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Please wait about a minute before requesting another code.",
+      );
+    }
+
+    let windowStart = d.rateHourStartedAt?.toMillis?.() ?? now;
+    let sendCount = d.rateHourSendCount ?? 0;
+    if (now - windowStart >= 3_600_000) {
+      windowStart = now;
+      sendCount = 0;
+    }
+    if (sendCount >= 5) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Too many codes were sent to this email. Try again in about an hour.",
+      );
+    }
+
+    const code = randomSixDigitString();
+    const secret = emailOtpHmacSecret.value();
+    const codeHash = hmacOtpCode(secret, email, code);
+
+    await docRef.set({
+      codeHash,
+      expiresAt: Timestamp.fromMillis(now + 15 * 60 * 1000),
+      verifyAttempts: 0,
+      lastSentAt: FieldValue.serverTimestamp(),
+      rateHourStartedAt: Timestamp.fromMillis(windowStart),
+      rateHourSendCount: sendCount + 1,
+    });
+
+    const emulator = process.env.FUNCTIONS_EMULATOR === "true";
+    const apiKey = resendApiKey.value();
+    if (emulator && !apiKey) {
+      console.log(`[requestEmailSignInCode] ${email} → code ${code} (emulator, no RESEND_API_KEY)`);
+    } else if (!apiKey) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Email delivery is not configured. Set the RESEND_API_KEY parameter for Cloud Functions (see Resend.com).",
+      );
+    } else {
+      try {
+        await sendSignInCodeEmail({ to: email, code });
+      } catch (e) {
+        console.error("sendSignInCodeEmail", e);
+        throw new HttpsError("internal", "Could not send the email. Try again later.");
+      }
+    }
+
+    return { ok: true };
+  },
+);
+
+exports.verifyEmailSignInCode = onCall(
+  { secrets: [emailOtpHmacSecret], region: "us-central1" },
+  async (request) => {
+    const emailRaw = request.data?.email;
+    const codeRaw = request.data?.code;
+    const code = typeof codeRaw === "string" ? codeRaw.trim() : String(codeRaw ?? "").trim();
+    if (!isValidEmail(emailRaw) || !/^\d{6}$/.test(code)) {
+      throw new HttpsError("invalid-argument", "Enter your email and the 6-digit code.");
+    }
+    const email = normalizeEmail(emailRaw);
+    const docRef = db.collection("emailSignInCodes").doc(email);
+    const snap = await docRef.get();
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "No active code for this email. Request a new one.");
+    }
+    const d = snap.data();
+    const exp = d.expiresAt?.toMillis?.() ?? 0;
+    if (Date.now() > exp) {
+      await docRef.delete();
+      throw new HttpsError("deadline-exceeded", "That code has expired. Request a new one.");
+    }
+    const attempts = d.verifyAttempts ?? 0;
+    if (attempts >= 8) {
+      await docRef.delete();
+      throw new HttpsError("permission-denied", "Too many attempts. Request a new code.");
+    }
+
+    const expected = d.codeHash;
+    const actual = hmacOtpCode(emailOtpHmacSecret.value(), email, code);
+    if (actual !== expected) {
+      await docRef.update({ verifyAttempts: FieldValue.increment(1) });
+      throw new HttpsError("permission-denied", "That code is not valid.");
+    }
+
+    await docRef.delete();
+
+    const auth = getAuth();
+    let userRecord;
+    try {
+      userRecord = await auth.getUserByEmail(email);
+    } catch (e) {
+      const code = e.code || e.errorInfo?.code;
+      if (code === "auth/user-not-found") {
+        userRecord = await auth.createUser({ email, emailVerified: false });
+      } else {
+        throw e;
+      }
+    }
+
+    const customToken = await auth.createCustomToken(userRecord.uid, {
+      signInVia: "email_otp",
+    });
+    return { customToken };
   },
 );
