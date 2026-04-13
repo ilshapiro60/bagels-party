@@ -2,12 +2,30 @@
 
 Static pages for **App Store Connect** and **Google Play** URLs.
 
-## Enable GitHub Pages
+## Fix “404 — There isn’t a GitHub Pages site here”
 
-1. On GitHub, open the repository that contains this `docs/` folder.
-2. **Settings → Pages**
-3. Under **Build and deployment**, set **Source** to **Deploy from a branch**.
-4. Choose branch **`main`** (or your default branch) and folder **`/docs`**, then **Save**.
+Your files on `main` are **not enough** until GitHub is told **how** to publish them.
+
+### Option A — GitHub Actions (recommended; repo includes a workflow)
+
+1. GitHub → **Settings → Pages**
+2. **Build and deployment** → **Source** → choose **GitHub Actions** (not “Deploy from a branch”).
+3. Push or merge so `.github/workflows/deploy-github-pages.yml` runs (or **Actions** tab → **Deploy GitHub Pages** → **Run workflow**).
+4. Wait for the workflow to finish (green check). The job shows the **Page URL**.
+5. Open: `https://<user>.github.io/<repo>/privacy.html`
+
+If you do not see **“GitHub Actions”** under Source, update the workflow file from the GitHub “Pages” settings **suggested workflow** once, or use Option B.
+
+### Option B — Deploy from branch
+
+1. **Settings → Pages**
+2. **Source** → **Deploy from a branch**
+3. Branch **`main`**, folder **`/docs`**, **Save**
+4. Wait 1–5 minutes, hard-refresh the page.
+
+---
+
+## Site URL (after it works)
 
 After the first deploy (usually within a few minutes), the site base URL will be:
 
