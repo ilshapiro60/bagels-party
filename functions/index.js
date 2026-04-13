@@ -470,17 +470,37 @@ exports.verifyEmailSignInCode = onCall(
     try {
       userRecord = await auth.getUserByEmail(email);
     } catch (e) {
-      const code = e.code || e.errorInfo?.code;
-      if (code === "auth/user-not-found") {
-        userRecord = await auth.createUser({ email, emailVerified: false });
+      const errCode = e.code || e.errorInfo?.code;
+      if (errCode === "auth/user-not-found") {
+        try {
+          userRecord = await auth.createUser({ email, emailVerified: false });
+        } catch (createErr) {
+          console.error("verifyEmailSignInCode createUser", createErr);
+          throw new HttpsError(
+            "internal",
+            createErr.message || "Could not create an account for this email.",
+          );
+        }
       } else {
-        throw e;
+        console.error("verifyEmailSignInCode getUserByEmail", e);
+        throw new HttpsError(
+          "internal",
+          e.message || "Could not look up this email in Authentication.",
+        );
       }
     }
 
-    const customToken = await auth.createCustomToken(userRecord.uid, {
-      signInVia: "email_otp",
-    });
-    return { customToken };
+    try {
+      const customToken = await auth.createCustomToken(userRecord.uid, {
+        signInVia: "email_otp",
+      });
+      return { customToken };
+    } catch (e) {
+      console.error("verifyEmailSignInCode createCustomToken", e);
+      throw new HttpsError(
+        "internal",
+        e.message || "Could not issue a sign-in token. Check Firebase Auth and IAM for Cloud Functions.",
+      );
+    }
   },
 );

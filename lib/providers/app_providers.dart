@@ -313,6 +313,13 @@ class AuthStateNotifier extends Notifier<AuthState> {
     } on FirebaseFunctionsException catch (e) {
       state = state.copyWith(isLoading: false);
       throw Exception(_emailOtpFunctionsMessage(e));
+    } on FirebaseAuthException catch (e) {
+      state = state.copyWith(isLoading: false);
+      throw Exception(
+        e.message?.trim().isNotEmpty == true
+            ? e.message!.trim()
+            : 'Custom token sign-in failed (${e.code}).',
+      );
     } catch (e) {
       state = state.copyWith(isLoading: false);
       rethrow;
@@ -490,16 +497,30 @@ class AuthStateNotifier extends Notifier<AuthState> {
 String _emailOtpFunctionsMessage(FirebaseFunctionsException e) {
   // Native SDKs use underscores (e.g. NOT_FOUND); normalize to hyphen form.
   final code = e.code.toLowerCase().replaceAll('_', '-');
+  final serverMsg = (e.message ?? '').trim();
+
   if (code == 'not-found') {
+    // Callable HttpsError('not-found', 'No active code…') must not be shown as
+    // "missing requestEmailSignInCode" — only true missing-function has no body.
+    if (serverMsg.isNotEmpty) {
+      return serverMsg;
+    }
     return 'Email sign-in is not available: the server could not find this '
-        'feature. Deploy Cloud Functions (requestEmailSignInCode) for region '
-        '$kFirebaseCallableRegion, or use Google / password.';
+        'feature. Deploy Cloud Functions (requestEmailSignInCode and '
+        'verifyEmailSignInCode) for region $kFirebaseCallableRegion, or use '
+        'Google / password.';
   }
   if (code == 'failed-precondition') {
-    return e.message ??
-        'Email is not set up on the server (missing RESEND_API_KEY or similar).';
+    return serverMsg.isNotEmpty
+        ? serverMsg
+        : 'Email is not set up on the server (missing RESEND_API_KEY or similar).';
   }
   if (code == 'permission-denied') {
+    // Wrong OTP / too many tries return permission-denied with a clear message;
+    // only fall back to IAM/App Check when the platform gives no detail.
+    if (serverMsg.isNotEmpty) {
+      return serverMsg;
+    }
     return 'Could not reach email sign-in (blocked). Redeploy functions with '
         'public invoker for OTP callables, or in Firebase Console turn off '
         'App Check enforcement for Cloud Functions until debug tokens are '
@@ -509,6 +530,13 @@ String _emailOtpFunctionsMessage(FirebaseFunctionsException e) {
       code == 'deadline-exceeded' ||
       code == 'unavailable') {
     return e.message ?? e.code;
+  }
+  if (code == 'internal') {
+    if (serverMsg.isNotEmpty) {
+      return serverMsg;
+    }
+    return 'Server error during sign-in. Check Firebase Functions logs for '
+        'verifyEmailSignInCode (Auth createUser / createCustomToken).';
   }
   return e.message ?? e.code;
 }
