@@ -160,7 +160,7 @@ workflows:
       # the build fails with: "No keystores with reference '…' were found".
       # Guide: https://docs.codemagic.io/flutter-code-signing/android-code-signing/
       android_signing:
-        - pawparty_android_upload
+        - bagels_upload
     cache:
       cache_paths:
         - $HOME/.pub-cache
