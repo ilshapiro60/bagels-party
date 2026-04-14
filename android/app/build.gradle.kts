@@ -1,5 +1,3 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -14,11 +12,26 @@ plugins {
 // https://docs.codemagic.io/code-signing-yaml/signing-android/ ).
 // Locally, use android/key.properties (gitignored) per
 // https://docs.flutter.dev/deployment/android#signing-the-app
-val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
-    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+//
+// Do not use java.util.Properties.load() for this file: on Windows, paths like
+// C:\Users\... are parsed as unicode escapes and fail with "Malformed \uxxxx encoding".
+fun loadLocalKeyProperties(file: java.io.File): Map<String, String> {
+    if (!file.exists()) return emptyMap()
+    return file.bufferedReader().useLines { lines ->
+        lines.mapNotNull { line ->
+            val t = line.trim()
+            if (t.isEmpty() || t.startsWith("#")) return@mapNotNull null
+            val eq = t.indexOf('=')
+            if (eq <= 0) return@mapNotNull null
+            val key = t.substring(0, eq).trim()
+            val value = t.substring(eq + 1).trim().trim('"')
+            key to value
+        }.toMap()
+    }
 }
+
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = loadLocalKeyProperties(keystorePropertiesFile)
 
 android {
     namespace = "com.pawparty.paw_party"
@@ -54,10 +67,10 @@ android {
                 keyAlias = System.getenv("CM_KEY_ALIAS")!!
                 keyPassword = System.getenv("CM_KEY_PASSWORD")!!
             } else if (keystorePropertiesFile.exists()) {
-                keyAlias = keystoreProperties.getProperty("keyAlias")!!
-                keyPassword = keystoreProperties.getProperty("keyPassword")!!
-                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile")!!)
-                storePassword = keystoreProperties.getProperty("storePassword")!!
+                keyAlias = keystoreProperties["keyAlias"]!!
+                keyPassword = keystoreProperties["keyPassword"]!!
+                storeFile = rootProject.file(keystoreProperties["storeFile"]!!)
+                storePassword = keystoreProperties["storePassword"]!!
             }
         }
     }
