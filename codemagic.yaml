@@ -41,7 +41,7 @@ workflows:
   pull-request-checks:
     name: PR checks (analyze, test, Android APK)
     max_build_duration: 45
-    instance_type: linux_x2
+    instance_type: linux
     environment:
       flutter: stable
     cache:
@@ -151,7 +151,7 @@ workflows:
   android-appbundle:
     name: Android App Bundle (release AAB)
     max_build_duration: 90
-    instance_type: linux_x2
+    instance_type: linux
     environment:
       flutter: stable
       # REQUIRED: Codemagic must have an Android keystore whose *reference name* is exactly
