@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/assets.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../providers/app_providers.dart';
-import '../../widgets/paw_party_hero_banner.dart';
 
 String _snackBarErrorText(Object e) {
   var s = e.toString();
@@ -143,10 +143,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const PawPartyHeroBanner(height: 100),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -179,34 +178,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                PawPartyColors.primary.withValues(alpha: 0.2),
-                PawPartyColors.bloomPinkSoft,
-              ],
-            ),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: PawPartyColors.primary.withValues(alpha: 0.12),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+        Image.asset(
+          PawPartyAssets.homeHeroPets,
+          height: 96,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (context, error, stackTrace) => Container(
+            width: 88,
+            height: 88,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  PawPartyColors.primary.withValues(alpha: 0.2),
+                  PawPartyColors.bloomPinkSoft,
+                ],
               ),
-            ],
-          ),
-          child: const Icon(
-            Icons.pets,
-            size: 38,
-            color: PawPartyColors.primary,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.pets,
+              size: 38,
+              color: PawPartyColors.primary,
+            ),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 10),
         Text(
           AppConstants.appName,
           textAlign: TextAlign.center,
