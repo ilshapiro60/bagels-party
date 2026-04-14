@@ -154,8 +154,11 @@ workflows:
     instance_type: linux_x2
     environment:
       flutter: stable
-      # Create in Codemagic (https://codemagic.io/) → Account or Team → Code signing identities → Android.
-      # Upload your upload keystore (.jks / .keystore); set the reference name to match the line below.
+      # REQUIRED: Codemagic must have an Android keystore whose *reference name* is exactly
+      # `pawparty_android_upload` (Personal settings → Code signing identities → Android), OR
+      # change the line below to match the reference you create. If the name does not match,
+      # the build fails with: "No keystores with reference '…' were found".
+      # Guide: https://docs.codemagic.io/flutter-code-signing/android-code-signing/
       android_signing:
         - pawparty_android_upload
     cache:
