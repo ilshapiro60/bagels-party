@@ -39,6 +39,17 @@
     <li><strong>Technical data:</strong> device type, app version, and diagnostic data needed to run and secure the service.</li>
   </ul>
 
+  <h2>Camera and media library (Android)</h2>
+  <p>
+    On Android, the app declares <strong>android.permission.CAMERA</strong> so you can capture photos or video with the device camera when you choose features that need it—for example adding or updating pet photos, profile images, or attachments in posts and messages. The camera is not used in the background for unrelated purposes; access is tied to actions you start in the app.
+  </p>
+  <p>
+    To let you pick existing pictures or videos from your device, the app may request photo and media library access (for example <strong>READ_MEDIA_IMAGES</strong>, <strong>READ_MEDIA_VIDEO</strong>, and on older Android versions <strong>READ_EXTERNAL_STORAGE</strong> where applicable). Only content you select is uploaded; we do not browse your library without your action.
+  </p>
+  <p>
+    Images and videos you capture or choose are stored and processed as part of the service (for example in cloud storage you use through the app) under the same rules as other content you upload. You can revoke camera or media permissions in your device settings; some features will not be available without them.
+  </p>
+
   <h2>How we use information</h2>
   <ul>
     <li>Provide accounts, profiles, messaging, neighborhood features, and meetups.</li>
