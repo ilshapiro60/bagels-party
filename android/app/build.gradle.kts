@@ -81,9 +81,10 @@ flutter {
 }
 
 dependencies {
-    // Native debug App Check before Flutter engine starts (see PawPartyApplication).
+    // Debug-only: release must not bundle firebase-appcheck-debug (startup crashes if the
+    // ContentProvider references stripped/missing debug classes). Release uses Play Integrity from Dart.
     implementation(platform("com.google.firebase:firebase-bom:33.14.0"))
-    implementation("com.google.firebase:firebase-appcheck-debug")
+    debugImplementation("com.google.firebase:firebase-appcheck-debug")
     // Native Places SDK (New) — Nearby Search for vet clinic picker.
     implementation("com.google.android.libraries.places:places:5.1.1")
 }

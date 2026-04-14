@@ -11,7 +11,11 @@ import 'config/theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await bootstrapFirebase();
-  MobileAds.instance.initialize();
+  try {
+    await MobileAds.instance.initialize();
+  } catch (e, st) {
+    debugPrint('MobileAds init failed (non-fatal): $e\n$st');
+  }
 
   Stripe.publishableKey = StripeConfig.publishableKey;
   Stripe.merchantIdentifier = StripeConfig.appleMerchantId;

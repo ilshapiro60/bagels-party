@@ -9,16 +9,12 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 
 /**
- * [FirebaseInitProvider] uses [android:initOrder]="100". This provider uses 101 so it
- * runs first and registers the App Check debug factory before any Firebase SDK
- * (Auth, etc.) can request a token — fixing 403 "App attestation failed" on cold start.
+ * Debug builds only: registers App Check debug factory before Firebase init (initOrder 101).
+ * The release variant lives under `src/release/` and does not reference debug classes.
  */
 class AppCheckEarlyInitProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         val ctx = context ?: return true
-        if (BuildConfig.BUILD_TYPE == "release") {
-            return true
-        }
         if (FirebaseApp.getApps(ctx).isEmpty()) {
             FirebaseApp.initializeApp(ctx)
         }

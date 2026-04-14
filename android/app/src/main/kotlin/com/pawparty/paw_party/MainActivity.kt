@@ -14,17 +14,22 @@ import com.google.android.libraries.places.api.net.SearchNearbyRequest
 
 class MainActivity : FlutterActivity() {
 
-    private lateinit var placesClient: PlacesClient
+    private var placesClient: PlacesClient? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
         val apiKey = appInfo.metaData?.getString("com.google.android.geo.API_KEY") ?: ""
-        if (!Places.isInitialized()) {
-            Places.initializeWithNewPlacesApiEnabled(applicationContext, apiKey)
+        try {
+            if (!Places.isInitialized()) {
+                Places.initializeWithNewPlacesApiEnabled(applicationContext, apiKey)
+            }
+            placesClient = Places.createClient(this)
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Places SDK init failed; vet nearby search disabled", e)
+            placesClient = null
         }
-        placesClient = Places.createClient(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
@@ -45,6 +50,12 @@ class MainActivity : FlutterActivity() {
         val radius = call.argument<Double>("radiusMeters") ?: 8000.0
         val maxResults = call.argument<Int>("maxResultCount") ?: 20
 
+        val client = placesClient
+        if (client == null) {
+            result.error("PLACES_UNAVAILABLE", "Places SDK not initialized", null)
+            return
+        }
+
         val fields = listOf(
             Place.Field.ID,
             Place.Field.DISPLAY_NAME,
@@ -58,7 +69,7 @@ class MainActivity : FlutterActivity() {
             .setRankPreference(SearchNearbyRequest.RankPreference.DISTANCE)
             .build()
 
-        placesClient.searchNearby(request)
+        client.searchNearby(request)
             .addOnSuccessListener { response ->
                 val places = response.places.mapNotNull { place ->
                     val id = place.id ?: return@mapNotNull null
