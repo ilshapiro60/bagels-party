@@ -157,6 +157,32 @@ class FirestoreProfileRepository {
     );
   }
 
+  /// Drops [friendUids] entries whose `profiles/{id}` no longer exists (e.g.
+  /// after the other user deleted their account but cleanup missed a uid).
+  static Future<void> pruneStaleFriendUids(String uid) async {
+    final snap = await _profiles.doc(uid).get();
+    if (!snap.exists) return;
+    final data = snap.data();
+    if (data == null) return;
+    final raw = data['friendUids'];
+    if (raw is! List) return;
+    final friendUids = raw
+        .map((e) => e is String ? e : e?.toString() ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (friendUids.isEmpty) return;
+    final stale = <String>[];
+    for (final fid in friendUids) {
+      if (fid == uid) continue;
+      final p = await fetchProfile(fid);
+      if (p == null) stale.add(fid);
+    }
+    if (stale.isEmpty) return;
+    await _profiles.doc(uid).update({
+      'friendUids': FieldValue.arrayRemove(stale),
+    });
+  }
+
   /// Removes [friendUid] from both users' friendUids arrays.
   static Future<void> removeFriend({
     required String uid,

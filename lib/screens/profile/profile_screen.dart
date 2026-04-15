@@ -482,6 +482,13 @@ class ProfileScreen extends ConsumerWidget {
         _menuItem(Icons.info_outline, 'About ${AppConstants.appName}', null, () {}),
         const SizedBox(height: 8),
         _menuItem(
+          Icons.delete_forever_outlined,
+          'Delete account',
+          'Permanently remove your data',
+          () => _confirmDeleteAccount(context, ref),
+          isDestructive: true,
+        ),
+        _menuItem(
           Icons.logout,
           'Sign Out',
           null,
@@ -525,6 +532,31 @@ class ProfileScreen extends ConsumerWidget {
       onTap: onTap,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
+  }
+}
+
+Future<void> _confirmDeleteAccount(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const _DeleteAccountConfirmationDialog(),
+  );
+  if (confirmed != true || !context.mounted) return;
+
+  try {
+    await ref.read(authStateProvider.notifier).deleteAccount();
+    if (!context.mounted) return;
+    // Defer navigation: signOut rebuilds this route to an empty subtree first;
+    // navigating in the same frame can trip framework assertions.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) context.go('/login');
+    });
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
   }
 }
 
@@ -862,4 +894,77 @@ Future<void> _showBusinessEditor(
     clearBusinessFields: !isEnabled,
   );
   ref.read(authStateProvider.notifier).updateUser(updated);
+}
+
+/// Owns [TextEditingController] so it is disposed only after the dialog route
+/// has unmounted — disposing immediately after [showDialog] returns can assert
+/// (`_dependents.isEmpty`) while [TextField] is still tearing down.
+class _DeleteAccountConfirmationDialog extends StatefulWidget {
+  const _DeleteAccountConfirmationDialog();
+
+  @override
+  State<_DeleteAccountConfirmationDialog> createState() =>
+      _DeleteAccountConfirmationDialogState();
+}
+
+class _DeleteAccountConfirmationDialogState extends State<_DeleteAccountConfirmationDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Delete account'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This permanently deletes your profile, pets, messages, parties, and other '
+            '${AppConstants.appName} data tied to this account. This cannot be undone.',
+            style: TextStyle(color: PawPartyColors.textSecondary, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              labelText: 'Type DELETE to confirm',
+            ),
+            autocorrect: false,
+            enableSuggestions: false,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            if (_controller.text.trim() == 'DELETE') {
+              Navigator.pop(context, true);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Type DELETE exactly to confirm.')),
+              );
+            }
+          },
+          style: TextButton.styleFrom(foregroundColor: PawPartyColors.error),
+          child: const Text('Delete permanently'),
+        ),
+      ],
+    );
+  }
 }

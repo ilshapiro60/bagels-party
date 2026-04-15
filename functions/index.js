@@ -6,6 +6,7 @@ const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 const { getAuth } = require("firebase-admin/auth");
+const { getStorage } = require("firebase-admin/storage");
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const emailOtpHmacSecret = defineSecret("EMAIL_OTP_HMAC_SECRET");
@@ -14,6 +15,14 @@ const resendApiKey = defineString("RESEND_API_KEY", { default: "" });
 const resendFrom = defineString("RESEND_FROM", {
   default: "ZumiTok <onboarding@resend.dev>",
 });
+
+// Default Admin app must exist before getFirestore()/getAuth() in Gen 2 workers.
+// Lazy init only inside handlers intermittently failed with app/no-app (see logs
+// for deleteMyAccount / requestEmailSignInCode). Eager init is cheap; keep
+// ensureAdminApp as a fallback for unusual reload paths.
+if (getApps().length === 0) {
+  initializeApp();
+}
 
 // Lazy-init Admin SDK so `firebase deploy` discovery does not hit the 10s timeout
 // loading user code (see https://firebase.google.com/docs/functions/tips#avoid_deployment_timeouts_during_initialization).
@@ -36,6 +45,33 @@ function messagingAdmin() {
 function authAdmin() {
   ensureAdminApp();
   return getAuth();
+}
+
+function storageBucket() {
+  ensureAdminApp();
+  return getStorage().bucket();
+}
+
+/** Delete all docs in a subcollection (paginated). */
+async function deleteSubcollection(parentRef, subName) {
+  const db = firestore();
+  for (;;) {
+    const snap = await parentRef.collection(subName).limit(400).get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
+/** Delete docs returned by a query (max 450 per batch). Caller must re-query until empty. */
+async function deleteQueryDocsOnce(querySnap) {
+  if (querySnap.empty) return 0;
+  const db = firestore();
+  const batch = db.batch();
+  querySnap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return querySnap.size;
 }
 
 function normalizeEmail(email) {
@@ -521,5 +557,231 @@ exports.verifyEmailSignInCode = onCall(
         e.message || "Could not issue a sign-in token. Check Firebase Auth and IAM for Cloud Functions.",
       );
     }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 8. Account deletion — authenticated user only (Admin SDK cleanup)
+// ---------------------------------------------------------------------------
+
+exports.deleteMyAccount = onCall(
+  {
+    region: "us-central1",
+    timeoutSeconds: 300,
+    memory: "512MiB",
+    invoker: "public",
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Sign in to delete your account.");
+    }
+    const uid = request.auth.uid;
+    const db = firestore();
+    const auth = authAdmin();
+
+    let normalizedEmail = "";
+    try {
+      const rec = await auth.getUser(uid);
+      normalizedEmail = normalizeEmail(rec.email || "");
+    } catch (e) {
+      const errCode = e.code || e.errorInfo?.code;
+      if (errCode === "auth/user-not-found") {
+        return { ok: true, alreadyDeleted: true };
+      }
+      console.error("deleteMyAccount getUser", e);
+      throw new HttpsError("internal", e.message || "Could not verify your account.");
+    }
+
+    try {
+      const profileRef = db.collection("profiles").doc(uid);
+      const profileSnap = await profileRef.get();
+      const profileData = profileSnap.exists ? profileSnap.data() : {};
+      const friendUids = Array.isArray(profileData?.friendUids)
+        ? profileData.friendUids.filter((x) => typeof x === "string" && x && x !== uid)
+        : [];
+
+      for (const fid of friendUids) {
+        try {
+          await db.collection("profiles").doc(fid).update({
+            friendUids: FieldValue.arrayRemove(uid),
+          });
+        } catch (e) {
+          console.warn("deleteMyAccount friend cleanup", fid, e?.message || e);
+        }
+      }
+
+      for (;;) {
+        const snap = await db
+          .collection("conversations")
+          .where("participants", "array-contains", uid)
+          .limit(40)
+          .get();
+        if (snap.empty) break;
+        for (const doc of snap.docs) {
+          await deleteSubcollection(doc.ref, "messages");
+          await doc.ref.delete();
+        }
+      }
+
+      for (;;) {
+        const snap = await db.collection("passportEntries").where("ownerId", "==", uid).limit(40).get();
+        if (snap.empty) break;
+        for (const doc of snap.docs) {
+          await deleteSubcollection(doc.ref, "comments");
+          await doc.ref.delete();
+        }
+      }
+
+      for (;;) {
+        const snap = await db
+          .collection("neighborhoodNewsPosts")
+          .where("authorId", "==", uid)
+          .limit(40)
+          .get();
+        if (snap.empty) break;
+        for (const doc of snap.docs) {
+          await deleteSubcollection(doc.ref, "comments");
+          await doc.ref.delete();
+        }
+      }
+
+      for (;;) {
+        const snap = await db.collection("reactions").where("userId", "==", uid).limit(450).get();
+        const n = await deleteQueryDocsOnce(snap);
+        if (n === 0) break;
+      }
+
+      for (const field of ["fromOwnerId", "toOwnerId"]) {
+        for (;;) {
+          const snap = await db.collection("petBuddyRequests").where(field, "==", uid).limit(450).get();
+          const n = await deleteQueryDocsOnce(snap);
+          if (n === 0) break;
+        }
+      }
+
+      for (;;) {
+        const snap = await db
+          .collection("petBuddyOwnerMutes")
+          .where("participants", "array-contains", uid)
+          .limit(450)
+          .get();
+        const n = await deleteQueryDocsOnce(snap);
+        if (n === 0) break;
+      }
+
+      const petsSnap = await profileRef.collection("pets").get();
+      const petIds = petsSnap.docs.map((d) => d.id);
+      for (const petId of petIds) {
+        for (;;) {
+          const snap = await db.collection("petBuddies").where("petIds", "array-contains", petId).limit(450).get();
+          const n = await deleteQueryDocsOnce(snap);
+          if (n === 0) break;
+        }
+      }
+
+      for (;;) {
+        const snap = await db.collection("meetups").where("hostId", "==", uid).limit(20).get();
+        if (snap.empty) break;
+        for (const mdoc of snap.docs) {
+          const mid = mdoc.id;
+          for (;;) {
+            const inv = await db.collection("partyInvites").where("meetupId", "==", mid).limit(450).get();
+            const n = await deleteQueryDocsOnce(inv);
+            if (n === 0) break;
+          }
+          for (;;) {
+            const alb = await db.collection("partyAlbumPhotos").where("meetupId", "==", mid).limit(450).get();
+            const n = await deleteQueryDocsOnce(alb);
+            if (n === 0) break;
+          }
+          for (;;) {
+            const st = await db.collection("partyStories").where("meetupId", "==", mid).limit(450).get();
+            const n = await deleteQueryDocsOnce(st);
+            if (n === 0) break;
+          }
+          for (;;) {
+            const pe = await db.collection("passportEntries").where("meetupId", "==", mid).limit(40).get();
+            if (pe.empty) break;
+            for (const doc of pe.docs) {
+              await deleteSubcollection(doc.ref, "comments");
+              await doc.ref.delete();
+            }
+          }
+          await mdoc.ref.delete();
+        }
+      }
+
+      for (const field of ["guestId", "hostId"]) {
+        for (;;) {
+          const snap = await db.collection("partyInvites").where(field, "==", uid).limit(450).get();
+          const n = await deleteQueryDocsOnce(snap);
+          if (n === 0) break;
+        }
+      }
+
+      for (;;) {
+        const snap = await db.collection("partyStories").where("authorId", "==", uid).limit(450).get();
+        const n = await deleteQueryDocsOnce(snap);
+        if (n === 0) break;
+      }
+
+      for (;;) {
+        const snap = await db.collection("partyAlbumPhotos").where("uploaderId", "==", uid).limit(450).get();
+        const n = await deleteQueryDocsOnce(snap);
+        if (n === 0) break;
+      }
+
+      for (const field of ["reporterId", "reportedUid"]) {
+        for (;;) {
+          const snap = await db.collection("chatSafetyReports").where(field, "==", uid).limit(450).get();
+          const n = await deleteQueryDocsOnce(snap);
+          if (n === 0) break;
+        }
+      }
+
+      for (;;) {
+        const snap = await db
+          .collection("neighborhoodNewsReports")
+          .where("reporterId", "==", uid)
+          .limit(450)
+          .get();
+        const n = await deleteQueryDocsOnce(snap);
+        if (n === 0) break;
+      }
+
+      for (const d of petsSnap.docs) {
+        await d.ref.delete();
+      }
+
+      await profileRef.delete();
+
+      if (normalizedEmail) {
+        try {
+          await db.collection("emailSignInCodes").doc(normalizedEmail).delete();
+        } catch (e) {
+          console.warn("deleteMyAccount emailSignInCodes", e?.message || e);
+        }
+      }
+
+      try {
+        await storageBucket().deleteFiles({ prefix: `users/${uid}/` });
+      } catch (e) {
+        console.warn("deleteMyAccount storage", e?.message || e);
+      }
+
+      await auth.deleteUser(uid);
+    } catch (e) {
+      console.error("deleteMyAccount", e);
+      if (e instanceof HttpsError) {
+        throw e;
+      }
+      throw new HttpsError(
+        "internal",
+        e.message || "Could not delete your account. Please try again or contact support.",
+      );
+    }
+
+    return { ok: true };
   },
 );

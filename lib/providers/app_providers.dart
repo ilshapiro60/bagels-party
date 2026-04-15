@@ -2,11 +2,13 @@ import 'dart:async' show TimeoutException, unawaited;
 
 import 'package:flutter/foundation.dart';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../config/auth_router_refresh.dart';
+import '../config/cloud_functions_region.dart';
 import '../config/firebase_bootstrap.dart';
 import '../config/google_sign_in_init.dart';
 import '../firebase_options.dart';
@@ -219,6 +221,7 @@ class AuthStateNotifier extends Notifier<AuthState> {
       await FirestoreProfileRepository.syncFriendsFromAcceptedPetBuddyRequests(
         u.uid,
       );
+      await FirestoreProfileRepository.pruneStaleFriendUids(u.uid);
       final refreshed = await FirestoreProfileRepository.fetchProfile(u.uid);
       if (refreshed != null) {
         p = await ProfilePersistence.mergeWithSaved(refreshed);
@@ -420,6 +423,37 @@ class AuthStateNotifier extends Notifier<AuthState> {
     state = const AuthState();
     ref.read(userPetsProvider.notifier).clear();
     authRouterRefresh.notifyAuthChanged();
+  }
+
+  /// Deletes the signed-in account server-side (Firestore, Storage, Auth), then signs out locally.
+  Future<void> deleteAccount() async {
+    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
+      throw StateError('Firebase is not configured.');
+    }
+    state = state.copyWith(isLoading: true);
+    try {
+      final callable = pawPartyFirebaseFunctions().httpsCallable('deleteMyAccount');
+      await callable.call();
+    } on FirebaseFunctionsException catch (e) {
+      state = state.copyWith(isLoading: false);
+      final code = e.code.toLowerCase();
+      if (code == 'not-found') {
+        throw Exception(
+          'Account deletion is not available yet: the deleteMyAccount cloud '
+          'function was not found. Deploy it to us-central1 (same region as '
+          'your other callables), then try again.',
+        );
+      }
+      final msg = e.message?.trim();
+      if (msg != null && msg.isNotEmpty) {
+        throw Exception(msg);
+      }
+      throw Exception(e.code);
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
+    await signOut();
   }
 
   void updateUser(UserProfile user) {
