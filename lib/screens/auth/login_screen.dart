@@ -41,6 +41,9 @@ String _authUserMessage(Object e) {
         return 'This sign-in method is not available right now.';
       case 'internal-error':
         return 'Something went wrong. Please try again in a moment.';
+      case 'missing-android-pkg-name':
+      case 'missing-ios-bundle-id':
+        return 'Password reset is not configured for this app build. Contact support.';
       default:
         break;
     }
@@ -159,6 +162,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             _passwordController.text,
           );
       if (mounted) context.go('/home');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_authUserMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enter your email in the field above, then tap Forgot password again.',
+          ),
+        ),
+      );
+      return;
+    }
+    try {
+      await ref.read(authStateProvider.notifier).sendPasswordResetEmail(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'If $email is registered, you’ll get a reset link shortly. '
+            'Check spam/junk if you don’t see it.',
+          ),
+        ),
+      );
+    } on ArgumentError catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Check the email address and try again.')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -343,7 +382,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           minimumSize: Size.zero,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        onPressed: () {},
+        onPressed: _handleForgotPassword,
         child: Text(
           'Forgot password?',
           style: TextStyle(

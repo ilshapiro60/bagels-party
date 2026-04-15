@@ -261,6 +261,25 @@ class AuthStateNotifier extends Notifier<AuthState> {
     }
   }
 
+  /// Sends Firebase’s password-reset email to [email] (user taps link in inbox).
+  Future<void> sendPasswordResetEmail(String email) async {
+    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
+      throw StateError('Firebase is not configured.');
+    }
+    final trimmed = email.trim();
+    if (trimmed.isEmpty || !trimmed.contains('@')) {
+      throw ArgumentError('Enter a valid email address first.');
+    }
+    state = state.copyWith(isLoading: true);
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: trimmed);
+    } finally {
+      if (!state.isAuthenticated) {
+        state = state.copyWith(isLoading: false);
+      }
+    }
+  }
+
   /// Sends a 6-digit sign-in code to [email] via [requestEmailSignInCode] (Resend).
   Future<void> sendEmailSignInCode(String email) async {
     if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
