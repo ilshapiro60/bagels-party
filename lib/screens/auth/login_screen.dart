@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,93 +63,14 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _codeController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
-  /// When false, default flow is email + 6-digit code.
-  bool _usePassword = false;
-  bool _codeSent = false;
-  int _resendSecs = 0;
-  Timer? _resendTimer;
 
   @override
   void dispose() {
-    _resendTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
-    _codeController.dispose();
     super.dispose();
-  }
-
-  void _startResendCooldown() {
-    _resendTimer?.cancel();
-    setState(() => _resendSecs = 60);
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      if (_resendSecs <= 1) {
-        t.cancel();
-        setState(() => _resendSecs = 0);
-      } else {
-        setState(() => _resendSecs--);
-      }
-    });
-  }
-
-  Future<void> _handleSendCode() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid email address.')),
-      );
-      return;
-    }
-    try {
-      await ref.read(authStateProvider.notifier).sendEmailSignInCode(email);
-      if (!mounted) return;
-      setState(() {
-        _codeSent = true;
-        _codeController.clear();
-      });
-      _startResendCooldown();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Check your email for a 6-digit code.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_snackBarErrorText(e))),
-      );
-    }
-  }
-
-  Future<void> _handleVerifyCode() async {
-    final code = _codeController.text.trim();
-    if (code.length != 6 || int.tryParse(code) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 6-digit code from your email.')),
-      );
-      return;
-    }
-    try {
-      await ref.read(authStateProvider.notifier).signInWithEmailOtp(
-            _emailController.text.trim(),
-            code,
-          );
-      if (mounted) context.go('/home');
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_authUserMessage(e))),
-      );
-    }
-  }
-
-  Future<void> _handleResendCode() async {
-    if (_resendSecs > 0) return;
-    await _handleSendCode();
   }
 
   Future<void> _handleSignIn() async {
@@ -227,9 +146,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 6),
                       _buildWelcomeText(),
                       const SizedBox(height: 10),
-                      if (_usePassword) ..._passwordFlow(authState.isLoading),
-                      if (!_usePassword && !_codeSent) ..._emailCodeStep1(authState.isLoading),
-                      if (!_usePassword && _codeSent) ..._emailCodeStep2(authState.isLoading),
+                      ..._passwordFlow(authState.isLoading),
                       const SizedBox(height: 8),
                       _buildDivider(),
                       const SizedBox(height: 8),
@@ -315,9 +232,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
         const SizedBox(height: 2),
         Text(
-          _usePassword
-              ? 'Sign in to find your pet\'s next playdate'
-              : 'We\'ll email you a 6-digit code — no password needed',
+          'Sign in to find your pet\'s next playdate',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 height: 1.25,
                 color: PawPartyColors.textSecondary,
@@ -426,187 +341,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _buildForgotPassword(),
       const SizedBox(height: 10),
       _buildSignInButton(isLoading),
-      const SizedBox(height: 4),
-      Center(
-        child: TextButton(
-          style: TextButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: () => setState(() {
-            _usePassword = false;
-            _codeSent = false;
-          }),
-          child: Text(
-            'Sign in with email code instead',
-            style: TextStyle(
-              color: PawPartyColors.primary,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
-
-  List<Widget> _emailCodeStep1(bool isLoading) {
-    return [
-      _buildEmailField(),
-      const SizedBox(height: 10),
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: isLoading ? null : _handleSendCode,
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          ),
-          child: isLoading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : const Text('Email me a code'),
-        ),
-      ).animate().fadeIn(delay: 500.ms, duration: 500.ms),
-      const SizedBox(height: 4),
-      Center(
-        child: TextButton(
-          style: TextButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: () => setState(() => _usePassword = true),
-          child: Text(
-            'Use password instead',
-            style: TextStyle(
-              color: PawPartyColors.primary,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
-
-  List<Widget> _emailCodeStep2(bool isLoading) {
-    return [
-      Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text(
-              _emailController.text.trim(),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            onPressed: isLoading
-                ? null
-                : () => setState(() {
-                      _codeSent = false;
-                      _codeController.clear();
-                    }),
-            child: const Text('Change'),
-          ),
-        ],
-      ),
-      const SizedBox(height: 6),
-      TextFormField(
-        controller: _codeController,
-        keyboardType: TextInputType.number,
-        textInputAction: TextInputAction.done,
-        maxLength: 6,
-        autofillHints: const [AutofillHints.oneTimeCode],
-        decoration: const InputDecoration(
-          labelText: '6-digit code',
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          prefixIcon: Icon(Icons.pin_outlined, size: 20),
-          prefixIconConstraints: BoxConstraints(minWidth: 40, minHeight: 36),
-          counterText: '',
-        ),
-        onFieldSubmitted: (_) => _handleVerifyCode(),
-      ),
-      const SizedBox(height: 10),
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: isLoading ? null : _handleVerifyCode,
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          ),
-          child: isLoading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : const Text('Verify & sign in'),
-        ),
-      ),
-      const SizedBox(height: 4),
-      Center(
-        child: TextButton(
-          style: TextButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: (isLoading || _resendSecs > 0) ? null : _handleResendCode,
-          child: Text(
-            _resendSecs > 0 ? 'Resend code in ${_resendSecs}s' : 'Resend code',
-            style: TextStyle(
-              color: PawPartyColors.primary,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ),
-      Center(
-        child: TextButton(
-          style: TextButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: () => setState(() {
-            _usePassword = true;
-            _codeSent = false;
-          }),
-          child: Text(
-            'Use password instead',
-            style: TextStyle(
-              color: PawPartyColors.textHint,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ),
     ];
   }
 

@@ -2,13 +2,11 @@ import 'dart:async' show TimeoutException, unawaited;
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../config/auth_router_refresh.dart';
-import '../config/cloud_functions_region.dart';
 import '../config/firebase_bootstrap.dart';
 import '../config/google_sign_in_init.dart';
 import '../firebase_options.dart';
@@ -280,71 +278,6 @@ class AuthStateNotifier extends Notifier<AuthState> {
     }
   }
 
-  /// Sends a 6-digit sign-in code to [email] via [requestEmailSignInCode] (Resend).
-  Future<void> sendEmailSignInCode(String email) async {
-    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
-      throw StateError('Firebase is not configured.');
-    }
-    final trimmed = email.trim();
-    if (trimmed.isEmpty || !trimmed.contains('@')) {
-      throw ArgumentError('Enter a valid email.');
-    }
-    state = state.copyWith(isLoading: true);
-    try {
-      final callable = pawPartyFirebaseFunctions().httpsCallable(
-        'requestEmailSignInCode',
-      );
-      await callable.call<Map<String, dynamic>>({'email': trimmed});
-    } on FirebaseFunctionsException catch (e) {
-      throw Exception(_emailOtpFunctionsMessage(e));
-    } finally {
-      if (!state.isAuthenticated) {
-        state = state.copyWith(isLoading: false);
-      }
-    }
-  }
-
-  /// Verifies the emailed 6-digit [code] and signs in with a custom token.
-  Future<void> signInWithEmailOtp(String email, String code) async {
-    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
-      throw StateError('Firebase is not configured.');
-    }
-    state = state.copyWith(isLoading: true);
-    try {
-      final callable = pawPartyFirebaseFunctions().httpsCallable(
-        'verifyEmailSignInCode',
-      );
-      final result = await callable.call<Map<String, dynamic>>({
-        'email': email.trim(),
-        'code': code.trim(),
-      });
-      final token = result.data['customToken'] as String?;
-      if (token == null || token.isEmpty) {
-        state = state.copyWith(isLoading: false);
-        throw StateError('Invalid response from server.');
-      }
-      final prior = FirebaseAuth.instance.currentUser;
-      if (prior != null && prior.isAnonymous) {
-        await FirebaseAuth.instance.signOut();
-      }
-      final cred = await FirebaseAuth.instance.signInWithCustomToken(token);
-      await _applyAuthenticatedUser(cred.user!);
-    } on FirebaseFunctionsException catch (e) {
-      state = state.copyWith(isLoading: false);
-      throw Exception(_emailOtpFunctionsMessage(e));
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(isLoading: false);
-      throw Exception(
-        e.message?.trim().isNotEmpty == true
-            ? e.message!.trim()
-            : 'Custom token sign-in failed (${e.code}).',
-      );
-    } catch (e) {
-      state = state.copyWith(isLoading: false);
-      rethrow;
-    }
-  }
-
   Future<void> signUp(String name, String email, String password) async {
     if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
       throw StateError('Firebase is not configured.');
@@ -511,53 +444,6 @@ class AuthStateNotifier extends Notifier<AuthState> {
       authMethod: data?.authMethod ?? 'email',
     );
   }
-}
-
-String _emailOtpFunctionsMessage(FirebaseFunctionsException e) {
-  // Native SDKs use underscores (e.g. NOT_FOUND); normalize to hyphen form.
-  final code = e.code.toLowerCase().replaceAll('_', '-');
-  final serverMsg = (e.message ?? '').trim();
-
-  if (code == 'not-found') {
-    // Callable HttpsError('not-found', 'No active code…') must not be shown as
-    // "missing requestEmailSignInCode" — only true missing-function has no body.
-    if (serverMsg.isNotEmpty) {
-      return serverMsg;
-    }
-    return 'Email sign-in is not available: the server could not find this '
-        'feature. Deploy Cloud Functions (requestEmailSignInCode and '
-        'verifyEmailSignInCode) for region $kFirebaseCallableRegion, or use '
-        'Google / password.';
-  }
-  if (code == 'failed-precondition') {
-    return serverMsg.isNotEmpty
-        ? serverMsg
-        : 'Email is not set up on the server (missing RESEND_API_KEY or similar).';
-  }
-  if (code == 'permission-denied') {
-    // Wrong OTP / too many tries return permission-denied with a clear message;
-    // only fall back to IAM/App Check when the platform gives no detail.
-    if (serverMsg.isNotEmpty) {
-      return serverMsg;
-    }
-    return 'Could not reach email sign-in (blocked). Redeploy functions with '
-        'public invoker for OTP callables, or in Firebase Console turn off '
-        'App Check enforcement for Cloud Functions until debug tokens are '
-        'registered. You can still use Google or password.';
-  }
-  if (code == 'resource-exhausted' ||
-      code == 'deadline-exceeded' ||
-      code == 'unavailable') {
-    return e.message ?? e.code;
-  }
-  if (code == 'internal') {
-    if (serverMsg.isNotEmpty) {
-      return serverMsg;
-    }
-    return 'Server error during sign-in. Check Firebase Functions logs for '
-        'verifyEmailSignInCode (Auth createUser / createCustomToken).';
-  }
-  return e.message ?? e.code;
 }
 
 String _authMethodLabel(User u) {
