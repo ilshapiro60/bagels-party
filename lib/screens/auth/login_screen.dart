@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -16,6 +17,39 @@ String _snackBarErrorText(Object e) {
     s = s.substring(prefix.length).trim();
   }
   return s;
+}
+
+/// Human-readable auth errors (avoids raw `[firebase_auth/invalid-credential]` in UI).
+String _authUserMessage(Object e) {
+  if (e is FirebaseAuthException) {
+    switch (e.code) {
+      case 'invalid-credential':
+      case 'wrong-password':
+      case 'user-not-found':
+        return 'That email or password is not correct. Try again or tap Forgot password.';
+      case 'invalid-email':
+        return 'That email address does not look valid.';
+      case 'user-disabled':
+        return 'This account has been disabled. Contact support if you need help.';
+      case 'too-many-requests':
+        return 'Too many sign-in attempts. Wait a few minutes and try again.';
+      case 'network-request-failed':
+        return 'Network problem. Check your connection and try again.';
+      case 'credential-already-in-use':
+        return 'That sign-in is already linked to another account.';
+      case 'operation-not-allowed':
+        return 'This sign-in method is not available right now.';
+      case 'internal-error':
+        return 'Something went wrong. Please try again in a moment.';
+      default:
+        break;
+    }
+  }
+  final raw = _snackBarErrorText(e);
+  if (raw.contains('firebase_auth') || raw.contains('FirebaseAuth')) {
+    return 'Sign-in could not be completed. Please try again.';
+  }
+  return raw;
 }
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -107,7 +141,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign-in failed: ${_snackBarErrorText(e)}')),
+        SnackBar(content: Text(_authUserMessage(e))),
       );
     }
   }
@@ -128,7 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign-in failed: ${_snackBarErrorText(e)}')),
+        SnackBar(content: Text(_authUserMessage(e))),
       );
     }
   }
@@ -587,7 +621,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign-in failed: ${_snackBarErrorText(e)}')),
+        SnackBar(content: Text(_authUserMessage(e))),
       );
     }
   }
