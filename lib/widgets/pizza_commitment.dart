@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import '../config/constants.dart';
 import '../config/theme.dart';
+import 'paw_party_pizza_icon.dart';
 
 class PizzaCommitmentWidget extends StatelessWidget {
   final bool willProvidePizza;
   final bool willProvideDrinks;
   final bool willAccommodateAllergies;
   final bool acknowledgesHostDuty;
+  final bool willIncludePotluck;
   final ValueChanged<bool> onPizzaChanged;
   final ValueChanged<bool> onDrinksChanged;
   final ValueChanged<bool> onAllergiesChanged;
   final ValueChanged<bool> onHostDutyChanged;
+  final ValueChanged<bool> onPotluckChanged;
 
   const PizzaCommitmentWidget({
     super.key,
@@ -18,10 +21,12 @@ class PizzaCommitmentWidget extends StatelessWidget {
     required this.willProvideDrinks,
     required this.willAccommodateAllergies,
     required this.acknowledgesHostDuty,
+    this.willIncludePotluck = false,
     required this.onPizzaChanged,
     required this.onDrinksChanged,
     required this.onAllergiesChanged,
     required this.onHostDutyChanged,
+    required this.onPotluckChanged,
   });
 
   @override
@@ -45,11 +50,13 @@ class PizzaCommitmentWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(
-            allChecked ? Icons.check_circle : Icons.local_pizza,
-            size: 48,
-            color: allChecked ? PawPartyColors.success : PawPartyColors.pizzaGold,
-          ),
+          allChecked
+              ? Icon(
+                  Icons.check_circle,
+                  size: 48,
+                  color: PawPartyColors.success,
+                )
+              : const PawPartyPizzaIcon(size: 48),
           const SizedBox(height: 12),
           Text(
             allChecked ? 'You\'re all set!' : 'The host promise',
@@ -94,6 +101,31 @@ class PizzaCommitmentWidget extends StatelessWidget {
             Icons.shield,
             acknowledgesHostDuty,
             onHostDutyChanged,
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Optional',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: PawPartyColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'You can host pizza and still invite guests to bring a side, dessert, or favorite dish.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: PawPartyColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _commitmentCheckbox(
+            'Guests may also bring a dish to share (potluck)',
+            Icons.restaurant_menu,
+            willIncludePotluck,
+            onPotluckChanged,
           ),
         ],
       ),

@@ -525,7 +525,6 @@ extension UserProfileCopyWith on UserProfile {
       longitude: longitude ?? this.longitude,
       petIds: petIds ?? this.petIds,
       friendUids: friendUids ?? this.friendUids,
-      childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
       hostRating: hostRating,
@@ -719,6 +718,68 @@ final incomingPartyInvitesProvider =
     return Stream.value([]);
   }
   return FirestoreMeetupRepository.watchIncomingInvites(uid);
+});
+
+/// Invites to parties that have not ended yet (excludes declined; cancelled meetups dropped).
+Future<List<PartyInvite>> filterPartyInvitesToFutureParties(
+  List<PartyInvite> invites,
+) async {
+  if (invites.isEmpty) return [];
+  final ids = invites.map((e) => e.meetupId).toSet();
+  final meetups = <String, Meetup?>{};
+  for (final id in ids) {
+    meetups[id] = await FirestoreMeetupRepository.fetchMeetup(id);
+  }
+  final out = <PartyInvite>[];
+  for (final inv in invites) {
+    if (inv.status == PartyInviteStatus.declined) continue;
+    final m = meetups[inv.meetupId];
+    if (m == null || m.status == MeetupStatus.cancelled || !m.hasNotEnded) {
+      continue;
+    }
+    out.add(inv);
+  }
+  out.sort((a, b) {
+    final ma = meetups[a.meetupId]!;
+    final mb = meetups[b.meetupId]!;
+    final byDate = ma.dateTime.compareTo(mb.dateTime);
+    if (byDate != 0) return byDate;
+    if (a.status == PartyInviteStatus.pending &&
+        b.status != PartyInviteStatus.pending) {
+      return -1;
+    }
+    if (b.status == PartyInviteStatus.pending &&
+        a.status != PartyInviteStatus.pending) {
+      return 1;
+    }
+    return b.sentAt.compareTo(a.sentAt);
+  });
+  return out;
+}
+
+/// Invitations the user can still act on or attend (party not ended).
+final futureIncomingPartyInvitesProvider =
+    StreamProvider<List<PartyInvite>>((ref) {
+  final uid = ref.watch(authStateProvider).user?.id;
+  if (!isFirebaseInitialized || uid == null) {
+    return Stream.value([]);
+  }
+  return FirestoreMeetupRepository.watchIncomingInvites(uid).asyncMap(
+    filterPartyInvitesToFutureParties,
+  );
+});
+
+/// Hosted parties that have not ended yet, soonest first.
+final futureHostedMeetupsProvider = Provider<AsyncValue<List<Meetup>>>((ref) {
+  return ref.watch(upcomingMeetupsProvider).when(
+        data: (list) {
+          final upcoming = list.where((m) => m.hasNotEnded).toList()
+            ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+          return AsyncValue.data(upcoming);
+        },
+        loading: () => const AsyncValue.loading(),
+        error: (e, st) => AsyncValue.error(e, st),
+      );
 });
 
 /// All public / open events (for Discover Events tab). Client-side distance filter.

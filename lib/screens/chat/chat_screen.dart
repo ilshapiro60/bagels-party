@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../config/theme.dart';
 import '../../models/direct_message.dart';
 import '../../models/pet_buddy_owner_mute.dart';
+import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_chat_safety_repository.dart';
@@ -23,9 +24,15 @@ import '../../widgets/paw_file_image.dart';
 import '../../widgets/paw_fullscreen_photo_viewer.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key, required this.friendUid});
+  /// 1:1 DM with a friend (deterministic conversation id).
+  const ChatScreen.friend({super.key, required this.friendUid}) : conversationId = null;
 
-  final String friendUid;
+  /// Open an existing conversation by Firestore doc id (DM or group).
+  const ChatScreen.conversation({super.key, required this.conversationId})
+      : friendUid = null;
+
+  final String? friendUid;
+  final String? conversationId;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -40,6 +47,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _pendingMediaUrls = <String>[];
   bool _busyUpload = false;
   bool _sending = false;
+  int _participantCount = 2;
+  List<String> _otherParticipantIds = [];
+  /// Comma-separated names for group / conversation-by-id app bar (null for 1:1 friend route).
+  String? _conversationTitle;
 
   @override
   void initState() {
@@ -50,14 +61,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _initConversation() async {
     final myUid = ref.read(authStateProvider).user?.id;
     if (myUid == null) return;
+    final cid = widget.conversationId;
+    if (cid != null) {
+      try {
+        final parts = await FirestoreMessageRepository.fetchParticipantIds(cid);
+        if (!parts.contains(myUid)) {
+          throw StateError('You are not in this conversation.');
+        }
+        final others = parts.where((u) => u != myUid).toList();
+        final title = await _loadCommaSeparatedNames(others);
+        if (!mounted) return;
+        setState(() {
+          _conversationId = cid;
+          _participantCount = parts.length;
+          _otherParticipantIds = others;
+          _conversationTitle = title;
+          _initializing = false;
+        });
+        await FirestoreMessageRepository.markConversationRead(cid, myUid);
+        unawaited(FirestoreMessageRepository.pruneExpiredMessages(cid));
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _initError = e.toString();
+          _initializing = false;
+        });
+      }
+      return;
+    }
+
+    final fid = widget.friendUid!;
     try {
-      final convId = await FirestoreMessageRepository.ensureConversation(
-        myUid,
-        widget.friendUid,
-      );
+      final convId = await FirestoreMessageRepository.ensureConversation(myUid, fid);
       if (!mounted) return;
       setState(() {
         _conversationId = convId;
+        _participantCount = 2;
+        _otherParticipantIds = [fid];
+        _conversationTitle = null;
         _initializing = false;
       });
       FirestoreMessageRepository.markConversationRead(convId, myUid);
@@ -76,8 +117,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  Future<String> _loadCommaSeparatedNames(List<String> uids) async {
+    if (uids.isEmpty) return 'Chat';
+    final names = <String>[];
+    for (final id in uids.take(8)) {
+      final p = await FirestoreProfileRepository.fetchProfile(id);
+      final n = p?.displayName.trim();
+      names.add(n != null && n.isNotEmpty ? n : 'Member');
+    }
+    if (uids.length > names.length) {
+      return '${names.join(', ')} (+${uids.length - names.length})';
+    }
+    return names.join(', ');
+  }
+
+  bool get _isGroupChat => _participantCount > 2;
+
   bool _isPairBlocked(String myUid, List<PetBuddyOwnerMute> mutes) {
-    final id = FirestorePetBuddyRepository.ownerMuteDocId(myUid, widget.friendUid);
+    final fid = widget.friendUid;
+    if (fid == null) return false;
+    final id = FirestorePetBuddyRepository.ownerMuteDocId(myUid, fid);
     return mutes.any((m) => m.docId == id);
   }
 
@@ -125,11 +184,63 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }
 
+    String? reportedUid = widget.friendUid;
+    if (reportedUid == null && _otherParticipantIds.isNotEmpty) {
+      if (_otherParticipantIds.length == 1) {
+        reportedUid = _otherParticipantIds.first;
+      } else {
+        if (!mounted) return;
+        reportedUid = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  child: Text(
+                    'Who are you reporting?',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                ),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _otherParticipantIds.length,
+                  itemBuilder: (ctx, i) {
+                    final uid = _otherParticipantIds[i];
+                    return FutureBuilder<UserProfile?>(
+                      future: FirestoreProfileRepository.fetchProfile(uid),
+                      builder: (ctx, snap) {
+                        final p = snap.data;
+                        final label = (p?.displayName ?? '').trim().isNotEmpty
+                            ? p!.displayName.trim()
+                            : 'Member';
+                        return ListTile(
+                          title: Text(label),
+                          subtitle: Text(uid, style: const TextStyle(fontSize: 11)),
+                          onTap: () => Navigator.pop(ctx, uid),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+        if (reportedUid == null || !mounted) return;
+      }
+    }
+    if (reportedUid == null) return;
+
     try {
       await FirestoreChatSafetyRepository.submitReport(
         reporter: user,
         conversationId: convId,
-        reportedUid: widget.friendUid,
+        reportedUid: reportedUid,
         reason: reason.text,
         contextSnippet: snippet,
       );
@@ -151,6 +262,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _blockUser() async {
+    final fid = widget.friendUid;
+    if (fid == null) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -174,10 +287,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final uid = ref.read(authStateProvider).user?.id;
     if (uid == null) return;
     try {
-      await FirestoreProfileRepository.removeFriend(uid: uid, friendUid: widget.friendUid);
+      await FirestoreProfileRepository.removeFriend(uid: uid, friendUid: fid);
       await FirestorePetBuddyRepository.muteBuddyOwners(
         actingUid: uid,
-        otherOwnerId: widget.friendUid,
+        otherOwnerId: fid,
       );
       await _refreshUser(uid);
       ref.invalidate(petBuddyOwnerMutesProvider);
@@ -351,20 +464,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final friendProfile = ref.watch(ownerProfileProvider(widget.friendUid));
-    final friendName = friendProfile.when(
-      data: (p) => p.displayName,
-      loading: () => 'Friend',
-      error: (_, _) => 'Friend',
-    );
-    final friendPhoto = friendProfile.when<String?>(
+    final fid = widget.friendUid;
+    final friendProfile =
+        fid != null ? ref.watch(ownerProfileProvider(fid)) : null;
+    final friendName = friendProfile?.when(
+          data: (p) => p.displayName,
+          loading: () => 'Friend',
+          error: (_, _) => 'Friend',
+        ) ??
+        'Friend';
+    final friendPhoto = friendProfile?.when<String?>(
       data: (p) => p.photoUrl,
       loading: () => null,
       error: (_, _) => null,
     );
     final myUid = ref.watch(authStateProvider).user?.id;
     final mutesAsync = ref.watch(petBuddyOwnerMutesProvider);
-    final isDmBlocked = myUid != null &&
+    final isDmBlocked = fid != null &&
+        myUid != null &&
         mutesAsync.maybeWhen(
           data: (mutes) => _isPairBlocked(myUid, mutes),
           orElse: () => false,
@@ -373,45 +490,68 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
-              child: friendPhoto != null && friendPhoto.isNotEmpty
-                  ? ClipOval(
-                      child: PawFileOrNetworkImage(
-                        path: friendPhoto,
-                        width: 36,
-                        height: 36,
-                      ),
-                    )
-                  : Text(
-                      friendName.isNotEmpty ? friendName[0] : '?',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: PawPartyColors.primary,
-                      ),
+        title: fid != null
+            ? Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
+                    child: friendPhoto != null && friendPhoto.isNotEmpty
+                        ? ClipOval(
+                            child: PawFileOrNetworkImage(
+                              path: friendPhoto,
+                              width: 36,
+                              height: 36,
+                            ),
+                          )
+                        : Text(
+                            friendName.isNotEmpty ? friendName[0] : '?',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: PawPartyColors.primary,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      friendName,
+                      overflow: TextOverflow.ellipsis,
                     ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                friendName,
-                overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: PawPartyColors.primary.withValues(alpha: 0.12),
+                    child: Icon(
+                      _isGroupChat ? Icons.group : Icons.person,
+                      color: PawPartyColors.primary,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _conversationTitle ?? (_isGroupChat ? 'Group chat' : 'Chat'),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'report') _reportConversation();
               if (v == 'block') _blockUser();
             },
-            itemBuilder: (ctx) => const [
-              PopupMenuItem(value: 'report', child: Text('Report…')),
-              PopupMenuItem(value: 'block', child: Text('Block user')),
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(value: 'report', child: Text('Report…')),
+              if (fid != null)
+                const PopupMenuItem(value: 'block', child: Text('Block user')),
             ],
           ),
         ],
@@ -526,7 +666,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               children: [
                 if (showDate)
                   _DateSeparator(date: msg.createdAt),
-                _MessageBubble(message: msg, isMine: isMine),
+                if (_isGroupChat && !isMine && myUid != null)
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final asyncP = ref.watch(ownerProfileProvider(msg.fromUid));
+                      final label = asyncP.when(
+                        data: (p) {
+                          final n = p.displayName.trim();
+                          return n.isNotEmpty ? n : 'Member';
+                        },
+                        loading: () => '…',
+                        error: (_, _) => 'Member',
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 6, bottom: 2),
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: PawPartyColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          _MessageBubble(message: msg, isMine: isMine),
+                        ],
+                      );
+                    },
+                  )
+                else
+                  _MessageBubble(message: msg, isMine: isMine),
               ],
             );
           },

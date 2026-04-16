@@ -113,6 +113,16 @@ class _NeighborhoodNewsComposeScreenState
   Future<void> _submit() async {
     final user = ref.read(authStateProvider).user;
     if (user == null) return;
+    final bodyTrim = _body.text.trim();
+    if (bodyTrim.isEmpty && _pickedPhotos.isEmpty && _pickedVideos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add a message or at least one photo or video.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       final postId = const Uuid().v4();
@@ -242,6 +252,7 @@ class _NeighborhoodNewsComposeScreenState
                         labelText: 'Message',
                         hintText: _bodyHint,
                         alignLabelWithHint: true,
+                        helperText: 'Optional if you add photos or a video',
                       ),
                     ),
                     const SizedBox(height: 16),

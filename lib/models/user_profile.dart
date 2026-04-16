@@ -17,7 +17,6 @@ class UserProfile {
   final List<String> petIds;
   /// UIDs of connected pet parents (paw buddy acceptances, etc.).
   final List<String> friendUids;
-  final List<String> childAges;
   final int hostCount;
   final int attendCount;
   final double hostRating;
@@ -45,7 +44,6 @@ class UserProfile {
     this.longitude,
     this.petIds = const [],
     this.friendUids = const [],
-    this.childAges = const [],
     this.hostCount = 0,
     this.attendCount = 0,
     this.hostRating = 0.0,
@@ -106,7 +104,6 @@ class UserProfile {
       'longitude': longitude,
       'petIds': petIds,
       'friendUids': friendUids,
-      'childAges': childAges,
       'hostCount': hostCount,
       'attendCount': attendCount,
       'hostRating': hostRating,
@@ -140,7 +137,6 @@ class UserProfile {
       longitude: (map['longitude'] as num?)?.toDouble(),
       petIds: List<String>.from(map['petIds'] ?? []),
       friendUids: List<String>.from(map['friendUids'] ?? []),
-      childAges: List<String>.from(map['childAges'] ?? []),
       hostCount: map['hostCount'] as int? ?? 0,
       attendCount: map['attendCount'] as int? ?? 0,
       hostRating: (map['hostRating'] as num?)?.toDouble() ?? 0.0,
@@ -174,7 +170,6 @@ class UserProfile {
       longitude: longitude,
       petIds: petIds,
       friendUids: friendUids,
-      childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
       hostRating: hostRating,
@@ -203,7 +198,6 @@ class UserProfile {
       longitude: longitude,
       petIds: petIds,
       friendUids: friendUids,
-      childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
       hostRating: hostRating,
@@ -245,7 +239,6 @@ class UserProfile {
       longitude: longitude,
       petIds: petIds,
       friendUids: friendUids,
-      childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
       hostRating: hostRating,
@@ -282,7 +275,6 @@ class UserProfile {
       longitude: longitude,
       petIds: petIds,
       friendUids: friendUids,
-      childAges: childAges,
       hostCount: hostCount,
       attendCount: attendCount,
       hostRating: hostRating,
@@ -306,7 +298,6 @@ class UserProfile {
       neighborhoodKey: UserProfile.normalizeAreaKey('Nearby'),
       petIds: const [],
       friendUids: const [],
-      childAges: const [],
       createdAt: DateTime.fromMillisecondsSinceEpoch(0),
     );
   }

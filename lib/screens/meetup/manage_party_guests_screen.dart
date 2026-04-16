@@ -24,6 +24,8 @@ class _ManagePartyGuestsScreenState extends ConsumerState<ManagePartyGuestsScree
   String? _title;
   bool _loadingMeetup = true;
   String? _loadError;
+  /// When true, invite/remove-invite actions are hidden (party already ended).
+  bool _partyEnded = false;
 
   @override
   void initState() {
@@ -52,6 +54,7 @@ class _ManagePartyGuestsScreenState extends ConsumerState<ManagePartyGuestsScree
       }
       setState(() {
         _title = m.title;
+        _partyEnded = !m.hasNotEnded;
         _loadingMeetup = false;
       });
     } catch (e) {
@@ -176,11 +179,12 @@ class _ManagePartyGuestsScreenState extends ConsumerState<ManagePartyGuestsScree
       appBar: AppBar(
         title: Text(_title ?? 'Guests'),
         actions: [
-          TextButton.icon(
-            onPressed: () => context.push('/invite-friends/${widget.meetupId}'),
-            icon: const Icon(Icons.person_add_alt_1),
-            label: const Text('Invite'),
-          ),
+          if (!_partyEnded)
+            TextButton.icon(
+              onPressed: () => context.push('/invite-friends/${widget.meetupId}'),
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('Invite'),
+            ),
         ],
       ),
       body: invitesAsync.when(
@@ -205,22 +209,26 @@ class _ManagePartyGuestsScreenState extends ConsumerState<ManagePartyGuestsScree
                     Icon(Icons.people_outline, size: 56, color: PawPartyColors.textHint),
                     const SizedBox(height: 16),
                     Text(
-                      'No invites yet',
+                      _partyEnded ? 'No guest list' : 'No invites yet',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Invite friends so they can accept and see your party details.',
+                      _partyEnded
+                          ? 'This party has ended — invites are no longer available.'
+                          : 'Invite friends so they can accept and see your party details.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: PawPartyColors.textSecondary),
                     ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: () =>
-                          context.push('/invite-friends/${widget.meetupId}'),
-                      icon: const Icon(Icons.person_add_alt_1),
-                      label: const Text('Invite friends'),
-                    ),
+                    if (!_partyEnded) ...[
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        onPressed: () =>
+                            context.push('/invite-friends/${widget.meetupId}'),
+                        icon: const Icon(Icons.person_add_alt_1),
+                        label: const Text('Invite friends'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -268,11 +276,12 @@ class _ManagePartyGuestsScreenState extends ConsumerState<ManagePartyGuestsScree
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.delete_outline, color: PawPartyColors.error),
-                      tooltip: 'Remove invite',
-                      onPressed: () => _confirmRemove(inv),
-                    ),
+                    if (!_partyEnded)
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, color: PawPartyColors.error),
+                        tooltip: 'Remove invite',
+                        onPressed: () => _confirmRemove(inv),
+                      ),
                   ],
                 ),
               );

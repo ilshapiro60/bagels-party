@@ -321,7 +321,8 @@ class _NeighborhoodNewsPostDetailScreenState
                       ),
                     if (post.title != null && post.title!.trim().isNotEmpty)
                       const SizedBox(height: 12),
-                    Text(post.body, style: Theme.of(context).textTheme.bodyLarge),
+                    if (post.body.trim().isNotEmpty)
+                      Text(post.body, style: Theme.of(context).textTheme.bodyLarge),
                     if (post.photoUrls.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildPhotoGallery(context, post.photoUrls),

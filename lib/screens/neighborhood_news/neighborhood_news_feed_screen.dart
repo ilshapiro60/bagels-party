@@ -10,7 +10,6 @@ import '../../providers/app_providers.dart';
 import '../../services/firestore_neighborhood_news_repository.dart';
 import '../../widgets/newsletter_ad_widget.dart';
 import '../../widgets/paw_file_image.dart';
-import '../../widgets/paw_video_thumbnail.dart';
 import '../../widgets/reaction_bar.dart';
 
 class NeighborhoodNewsFeedScreen extends ConsumerStatefulWidget {
@@ -37,6 +36,12 @@ class _NeighborhoodNewsFeedScreenState
         automaticallyImplyLeading: false,
         toolbarHeight: 48,
       ),
+      floatingActionButton: user != null && user.neighborhoodKey.isNotEmpty
+          ? FloatingActionButton(
+              onPressed: () => context.push('/neighborhood-news/new'),
+              child: const Icon(Icons.post_add_outlined),
+            )
+          : null,
       body: user == null
           ? const SizedBox.shrink()
           : user.neighborhoodKey.isEmpty
@@ -92,15 +97,18 @@ class _NeighborhoodNewsFeedScreenState
                           final totalCount = filtered.length + adCount;
 
                           return ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+                            padding: const EdgeInsets.fromLTRB(0, 8, 0, 96),
                             itemCount: totalCount,
-                            separatorBuilder: (context, index) => const SizedBox(height: 10),
+                            separatorBuilder: (context, index) => const SizedBox(height: 4),
                             itemBuilder: (context, i) {
                               final adsBefore = i == 0 ? 0 : (i) ~/ 6;
                               final isAd = i >= 5 && (i + 1) % 6 == 0;
 
                               if (isAd) {
-                                return const NewsletterAdWidget();
+                                return const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: NewsletterAdWidget(),
+                                );
                               }
 
                               final postIndex = i - adsBefore;
@@ -121,9 +129,6 @@ class _NeighborhoodNewsFeedScreenState
                     ),
                   ],
                 ),
-      bottomNavigationBar: user != null && user.neighborhoodKey.isNotEmpty
-          ? _buildActionPanel(context)
-          : null,
     );
   }
 
@@ -204,333 +209,6 @@ class _NeighborhoodNewsFeedScreenState
     );
   }
 
-  Widget _buildActionPanel(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: PawPartyColors.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, -3),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _actionButton(
-                icon: Icons.add,
-                label: 'Post',
-                onTap: () => context.push('/neighborhood-news/new'),
-              ),
-              _actionButton(
-                icon: Icons.photo_library_outlined,
-                label: 'Photos',
-                onTap: () => _openMediaReel(context, filterVideo: false),
-              ),
-              _actionButton(
-                icon: Icons.videocam_outlined,
-                label: 'Videos',
-                onTap: () => _openMediaReel(context, filterVideo: true),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _actionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: PawPartyColors.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: PawPartyColors.primary, size: 18),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: PawPartyColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static const _videoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'];
-
-  static bool _isVideoUrl(String url) {
-    final lower = url.split('?').first.toLowerCase();
-    return _videoExtensions.any((ext) => lower.endsWith(ext));
-  }
-
-  void _openMediaReel(BuildContext context, {required bool filterVideo}) {
-    final postsAsync = ref.read(neighborhoodNewsPostsProvider);
-    final posts = postsAsync.value ?? [];
-
-    final allUrls = <String>[];
-    for (final p in posts) {
-      allUrls.addAll(p.photoUrls);
-      allUrls.addAll(p.videoUrls);
-    }
-
-    final filtered = filterVideo
-        ? allUrls.where(_isVideoUrl).toList()
-        : allUrls.where((u) => !_isVideoUrl(u)).toList();
-
-    if (filtered.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(filterVideo
-              ? 'No videos in the newsletter yet.'
-              : 'No photos in the newsletter yet.'),
-        ),
-      );
-      return;
-    }
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _FullScreenMediaViewer(
-          urls: filtered,
-          initialIndex: 0,
-          isVideo: filterVideo,
-        ),
-      ),
-    );
-  }
-}
-
-/// Full-screen media viewer.
-/// Vertical swipe moves between items of the same type.
-/// Horizontal swipe right returns to the previous screen.
-class _FullScreenMediaViewer extends ConsumerStatefulWidget {
-  const _FullScreenMediaViewer({
-    required this.urls,
-    required this.initialIndex,
-    this.isVideo = false,
-  });
-
-  final List<String> urls;
-  final int initialIndex;
-  final bool isVideo;
-
-  @override
-  ConsumerState<_FullScreenMediaViewer> createState() => _FullScreenMediaViewerState();
-}
-
-class _FullScreenMediaViewerState extends ConsumerState<_FullScreenMediaViewer> {
-  late final PageController _pageController;
-  late int _currentPage;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentPage = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final topPad = MediaQuery.of(context).padding.top;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
-            Navigator.of(context).pop();
-          }
-        },
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: _pageController,
-              scrollDirection: Axis.vertical,
-              itemCount: widget.urls.length,
-              onPageChanged: (i) => setState(() => _currentPage = i),
-              itemBuilder: (context, i) {
-                if (widget.isVideo) {
-                  return _VideoPage(
-                    url: widget.urls[i],
-                    autoPlay: i == _currentPage,
-                  );
-                }
-                return Center(
-                  child: InteractiveViewer(
-                    child: Image.network(
-                      widget.urls[i],
-                      fit: BoxFit.contain,
-                      loadingBuilder: (_, child, progress) {
-                        if (progress == null) return child;
-                        return const Center(
-                          child: CircularProgressIndicator(color: Colors.white38),
-                        );
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-            Positioned(
-              top: topPad + 8,
-              left: 8,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-            Positioned(
-              top: topPad + 16,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_currentPage + 1} / ${widget.urls.length}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: MediaQuery.of(context).padding.bottom + 60,
-              left: 16,
-              right: 16,
-              child: ReactionBar(
-                targetId: 'media_${widget.urls[_currentPage].hashCode}',
-                dark: true,
-              ),
-            ),
-            if (_currentPage < widget.urls.length - 1)
-              Positioned(
-                bottom: MediaQuery.of(context).padding.bottom + 24,
-                left: 0,
-                right: 0,
-                child: const Center(
-                  child: Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Colors.white38,
-                    size: 32,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VideoPage extends StatefulWidget {
-  const _VideoPage({required this.url, required this.autoPlay});
-  final String url;
-  final bool autoPlay;
-
-  @override
-  State<_VideoPage> createState() => _VideoPageState();
-}
-
-class _VideoPageState extends State<_VideoPage> {
-  late VideoPlayerController _controller;
-  bool _initialized = false;
-  bool _hasError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      ..initialize().then((_) {
-        if (!mounted) return;
-        setState(() => _initialized = true);
-        if (widget.autoPlay) _controller.play();
-      }).catchError((_) {
-        if (mounted) setState(() => _hasError = true);
-      });
-    _controller.setLooping(true);
-  }
-
-  @override
-  void didUpdateWidget(_VideoPage old) {
-    super.didUpdateWidget(old);
-    if (widget.autoPlay && _initialized) {
-      _controller.play();
-    } else {
-      _controller.pause();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_hasError) {
-      return const Center(
-        child: Icon(Icons.error_outline, color: Colors.white38, size: 48),
-      );
-    }
-    if (!_initialized) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white38),
-      );
-    }
-    return Center(
-      child: AspectRatio(
-        aspectRatio: _controller.value.aspectRatio,
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _controller.value.isPlaying
-                  ? _controller.pause()
-                  : _controller.play();
-            });
-          },
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              VideoPlayer(_controller),
-              if (!_controller.value.isPlaying)
-                const Icon(Icons.play_arrow, color: Colors.white70, size: 64),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _NoNeighborhoodMessage extends StatelessWidget {
@@ -565,6 +243,176 @@ class _NoNeighborhoodMessage extends StatelessWidget {
   }
 }
 
+/// Full-bleed media carousel (photos then videos); swipe horizontally like Instagram.
+class _PostMediaCarousel extends StatefulWidget {
+  const _PostMediaCarousel({required this.post});
+
+  final NeighborhoodNewsPost post;
+
+  @override
+  State<_PostMediaCarousel> createState() => _PostMediaCarouselState();
+}
+
+class _PostMediaCarouselState extends State<_PostMediaCarousel> {
+  late final PageController _pageController;
+  int _page = 0;
+
+  int get _itemCount => widget.post.photoUrls.length + widget.post.videoUrls.length;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_itemCount == 0) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AspectRatio(
+          aspectRatio: 4 / 5,
+          child: ColoredBox(
+            color: Colors.black,
+            child: PageView.builder(
+              controller: _pageController,
+              onPageChanged: (i) => setState(() => _page = i),
+              itemCount: _itemCount,
+              itemBuilder: (context, i) {
+                final nPhotos = widget.post.photoUrls.length;
+                if (i < nPhotos) {
+                  return PawFileOrNetworkImage(
+                    path: widget.post.photoUrls[i],
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                  );
+                }
+                final vi = i - nPhotos;
+                return _NewsFeedInlineVideo(
+                  url: widget.post.videoUrls[vi],
+                  playing: i == _page,
+                );
+              },
+            ),
+          ),
+        ),
+        if (_itemCount > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                _itemCount,
+                (i) => Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: i == _page
+                        ? PawPartyColors.primary
+                        : PawPartyColors.textHint.withValues(alpha: 0.35),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _NewsFeedInlineVideo extends StatefulWidget {
+  const _NewsFeedInlineVideo({required this.url, required this.playing});
+
+  final String url;
+  final bool playing;
+
+  @override
+  State<_NewsFeedInlineVideo> createState() => _NewsFeedInlineVideoState();
+}
+
+class _NewsFeedInlineVideoState extends State<_NewsFeedInlineVideo> {
+  late final VideoPlayerController _controller;
+  bool _ready = false;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..setLooping(true)
+      ..initialize().then((_) {
+        if (!mounted) return;
+        setState(() => _ready = true);
+        if (widget.playing) _controller.play();
+      }).catchError((_) {
+        if (mounted) setState(() => _error = true);
+      });
+  }
+
+  @override
+  void didUpdateWidget(covariant _NewsFeedInlineVideo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_ready || _error) return;
+    if (widget.playing) {
+      _controller.play();
+    } else {
+      _controller.pause();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error) {
+      return Center(
+        child: Icon(Icons.videocam_off_outlined, color: Colors.white.withValues(alpha: 0.5), size: 40),
+      );
+    }
+    if (!_ready) {
+      return const Center(
+        child: SizedBox(
+          width: 28,
+          height: 28,
+          child: CircularProgressIndicator(color: Colors.white38, strokeWidth: 2),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _controller.value.isPlaying ? _controller.pause() : _controller.play();
+        });
+      },
+      child: ClipRect(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _controller.value.size.width,
+            height: _controller.value.size.height,
+            child: VideoPlayer(_controller),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PostCard extends StatelessWidget {
   const _PostCard({
     required this.post,
@@ -578,122 +426,105 @@ class _PostCard extends StatelessWidget {
   final bool isOwner;
   final VoidCallback? onDelete;
 
-  Widget _mediaStrip() {
-    final photoCap = post.photoUrls.length.clamp(0, 3);
-    final videoCap = post.videoUrls.length.clamp(0, 2);
-    return SizedBox(
-      height: 52,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: photoCap + videoCap,
-        separatorBuilder: (_, _) => const SizedBox(width: 6),
-        itemBuilder: (context, i) {
-          if (i < photoCap) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: SizedBox(
-                width: 52,
-                height: 52,
-                child: PawFileOrNetworkImage(path: post.photoUrls[i]),
-              ),
-            );
-          }
-          final vi = i - photoCap;
-          return PawVideoThumbnail(
-            videoUrl: post.videoUrls[vi],
-            width: 52,
-            height: 52,
-            borderRadius: 6,
-          );
-        },
-      ),
+  void _openPostDetail(BuildContext context) {
+    context.push(
+      '/neighborhood-news/post/${post.id}',
+      extra: post,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final cat = post.newsCategory;
-    return Material(
-      color: PawPartyColors.surface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => context.push(
-          '/neighborhood-news/post/${post.id}',
-          extra: post,
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: PawPartyColors.divider),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final hasMedia = post.photoUrls.isNotEmpty || post.videoUrls.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Icon(cat.icon, size: 14, color: PawPartyColors.secondary),
-                  const SizedBox(width: 4),
-                  Text(
-                    cat.label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: PawPartyColors.secondary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    dateFormat.format(post.createdAt),
-                    style: TextStyle(fontSize: 10, color: PawPartyColors.textHint),
-                  ),
-                  if (isOwner && onDelete != null) ...[
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: onDelete,
-                      child: Icon(Icons.delete_outline, size: 16, color: PawPartyColors.textHint),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 5),
-              if (post.title != null && post.title!.trim().isNotEmpty) ...[
-                Text(
-                  post.title!,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-              ],
+              Icon(cat.icon, size: 14, color: PawPartyColors.secondary),
+              const SizedBox(width: 4),
               Text(
-                post.body,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13, color: PawPartyColors.textPrimary),
+                cat.label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: PawPartyColors.secondary,
+                ),
               ),
-              if (post.photoUrls.isNotEmpty || post.videoUrls.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                _mediaStrip(),
-              ],
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      post.authorDisplayName,
-                      style: TextStyle(fontSize: 11, color: PawPartyColors.textHint),
-                    ),
-                  ),
-                ],
+              const Spacer(),
+              Text(
+                dateFormat.format(post.createdAt),
+                style: TextStyle(fontSize: 10, color: PawPartyColors.textHint),
               ),
-              const SizedBox(height: 4),
-              ReactionBar(targetId: post.id),
+              if (isOwner && onDelete != null)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  icon: Icon(Icons.delete_outline, size: 18, color: PawPartyColors.textHint),
+                  onPressed: onDelete,
+                  tooltip: 'Delete post',
+                ),
             ],
           ),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              post.authorDisplayName,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: PawPartyColors.textPrimary),
+            ),
+          ),
+        ),
+        if (hasMedia) _PostMediaCarousel(post: post),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: ReactionBar(targetId: post.id),
+        ),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _openPostDetail(context),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (post.title != null && post.title!.trim().isNotEmpty) ...[
+                    Text(
+                      post.title!,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
+                  if (post.body.trim().isNotEmpty)
+                    Text.rich(
+                      TextSpan(
+                        style: TextStyle(fontSize: 14, height: 1.35, color: PawPartyColors.textPrimary),
+                        children: [
+                          TextSpan(
+                            text: '${post.authorDisplayName} ',
+                            style: TextStyle(fontWeight: FontWeight.w700, color: PawPartyColors.textPrimary),
+                          ),
+                          TextSpan(text: post.body),
+                        ],
+                      ),
+                      maxLines: 8,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Divider(height: 1, thickness: 1, color: PawPartyColors.divider.withValues(alpha: 0.45)),
+      ],
     );
   }
 }

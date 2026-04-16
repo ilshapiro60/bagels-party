@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../widgets/paw_party_hero_banner.dart';
+import '../../widgets/paw_party_pizza_icon.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -34,7 +35,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         color: PawPartyColors.secondary,
       ),
       const _OnboardingPage(
-        icon: Icons.local_pizza,
+        iconWidget: PawPartyPizzaIcon(size: 80),
         title: 'Host a party',
         subtitle:
             'Invite matched families over. Pizza and drinks provided by the host — that\'s our promise!',
@@ -182,17 +183,22 @@ class _OnboardingHeroPage extends StatelessWidget {
 }
 
 class _OnboardingPage extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? iconWidget;
   final String title;
   final String subtitle;
   final Color color;
 
   const _OnboardingPage({
-    required this.icon,
+    this.icon,
+    this.iconWidget,
     required this.title,
     required this.subtitle,
     required this.color,
-  });
+  }) : assert(
+          (icon != null) ^ (iconWidget != null),
+          'Provide exactly one of icon or iconWidget',
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -208,7 +214,7 @@ class _OnboardingPage extends StatelessWidget {
               color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 80, color: color),
+            child: iconWidget ?? Icon(icon!, size: 80, color: color),
           )
               .animate()
               .fadeIn(duration: 600.ms)

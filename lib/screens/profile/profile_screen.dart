@@ -5,12 +5,14 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
+import '../../models/pet.dart';
 import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/owner_media_strip.dart';
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/paw_party_pizza_icon.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -62,11 +64,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             _buildHostingPricingCard(context, user),
             const SizedBox(height: 24),
-            _buildSection(
-              context,
-              'My Pets',
-              pets.map((pet) => _buildPetListItem(context, pet)).toList(),
-            ),
+            _buildMyPetsSection(context, ref, pets),
             const SizedBox(height: 24),
             _buildMenuItems(context, ref, user),
             const SizedBox(height: 32),
@@ -284,7 +282,7 @@ class ProfileScreen extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.local_pizza, size: 32, color: PawPartyColors.pizzaGold),
+          const PawPartyPizzaIcon(size: 32),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -342,78 +340,196 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSection(BuildContext context, String title, List<Widget> children) {
+  Widget _buildMyPetsSection(
+    BuildContext context,
+    WidgetRef ref,
+    List<Pet> pets,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
-        ...children,
+        Row(
+          children: [
+            Text('My Pets', style: Theme.of(context).textTheme.titleLarge),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => context.push('/create-pet'),
+              icon: const Icon(Icons.add, size: 20),
+              label: const Text('Add pet'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (pets.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: PawPartyColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: PawPartyColors.divider.withValues(alpha: 0.5)),
+            ),
+            child: Text(
+              'No pets yet. Add a pet to set up their profile, photos, and videos. '
+              'New photos and videos you upload are also shared on the Area newsletter when your neighborhood is set.',
+              style: TextStyle(fontSize: 14, color: PawPartyColors.textSecondary, height: 1.35),
+            ),
+          )
+        else
+          ...pets.map((pet) => _buildPetListItem(context, ref, pet)),
       ],
     );
   }
 
-  Widget _buildPetListItem(BuildContext context, pet) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: PawPartyColors.divider.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: PawPartyColors.primary.withValues(alpha: 0.1),
-            child: pet.photoUrl != null && pet.photoUrl!.isNotEmpty
-                ? ClipOval(
-                    child: PawFileOrNetworkImage(
-                      path: pet.photoUrl!,
-                      width: 48,
-                      height: 48,
-                    ),
-                  )
-                : Text(
-                    pet.name[0],
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: PawPartyColors.primary,
-                    ),
-                  ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(pet.name, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 2),
-                Text(
-                  '${pet.breed ?? pet.type} • ${pet.ageDisplay}',
-                  style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: PawPartyColors.secondary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              pet.energyLabel,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: PawPartyColors.secondary,
-              ),
-            ),
+  Future<void> _confirmDeletePet(
+    BuildContext context,
+    WidgetRef ref,
+    Pet pet,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove ${pet.name}?'),
+        content: const Text(
+          'This deletes the pet profile and gallery from your account. '
+          'Meetups or invites that reference this pet may need to be updated separately.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: PawPartyColors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await ref.read(userPetsProvider.notifier).removePet(pet.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${pet.name} was removed.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete pet: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildPetListItem(BuildContext context, WidgetRef ref, Pet pet) {
+    final thumb = pet.photoUrl?.trim();
+    final hasPhoto = thumb != null && thumb.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: PawPartyColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: PawPartyColors.divider.withValues(alpha: 0.5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => context.push('/edit-pet/${pet.id}', extra: pet),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 26,
+                          backgroundColor: PawPartyColors.primary.withValues(alpha: 0.1),
+                          child: hasPhoto
+                              ? ClipOval(
+                                  child: PawFileOrNetworkImage(
+                                    path: thumb,
+                                    width: 52,
+                                    height: 52,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Text(
+                                  pet.name.isNotEmpty ? pet.name[0].toUpperCase() : '?',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: PawPartyColors.primary,
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(pet.name, style: Theme.of(context).textTheme.titleMedium),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${pet.breed ?? pet.type} • ${pet.ageDisplay}',
+                                style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tap to edit profile & media',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: PawPartyColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: PawPartyColors.secondary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            pet.energyLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: PawPartyColors.secondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                onSelected: (value) {
+                  if (value == 'view') {
+                    context.push('/pet/${pet.id}');
+                  } else if (value == 'delete') {
+                    _confirmDeletePet(context, ref, pet);
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(value: 'view', child: Text('View public profile')),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Delete pet', style: TextStyle(color: PawPartyColors.error)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -423,14 +539,6 @@ class ProfileScreen extends ConsumerWidget {
     WidgetRef ref,
     UserProfile user,
   ) {
-    final ages = user.childAges
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    final childrenSubtitle = ages.isEmpty
-        ? 'None on file'
-        : 'Ages: ${ages.join(', ')}';
-
     return Column(
       children: [
         _menuItem(
@@ -465,12 +573,6 @@ class ProfileScreen extends ConsumerWidget {
             () => context.push('/moderation/chat-safety'),
           ),
         ],
-        _menuItem(
-          Icons.child_care,
-          'Children in Household',
-          childrenSubtitle,
-          () {},
-        ),
         _menuItem(
           Icons.notifications_outlined,
           'Notifications',

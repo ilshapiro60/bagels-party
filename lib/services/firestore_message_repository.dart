@@ -50,6 +50,35 @@ class FirestoreMessageRepository {
     return docId;
   }
 
+  /// Creates or reuses a conversation for [participantUids] (unique, includes caller).
+  /// Two-person chats use the deterministic pair id; larger groups use a new doc id.
+  static Future<String> ensureGroupConversation(
+    List<String> participantUids,
+  ) async {
+    final sorted = participantUids.toSet().toList()..sort();
+    if (sorted.length < 2) {
+      throw ArgumentError('At least two participants are required.');
+    }
+    if (sorted.length == 2) {
+      return ensureConversation(sorted[0], sorted[1]);
+    }
+    final docRef = _conversations.doc();
+    await docRef.set({
+      'participants': sorted,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+    return docRef.id;
+  }
+
+  /// Loads participant uid list for an existing conversation (throws if missing).
+  static Future<List<String>> fetchParticipantIds(String conversationId) async {
+    final snap = await _conversations.doc(conversationId).get();
+    if (!snap.exists) {
+      throw StateError('Conversation not found.');
+    }
+    return List<String>.from(snap.data()?['participants'] ?? []);
+  }
+
   /// Send a message in a conversation.
   static Future<void> sendMessage({
     required String conversationId,

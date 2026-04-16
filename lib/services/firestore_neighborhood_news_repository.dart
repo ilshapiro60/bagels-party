@@ -43,7 +43,9 @@ class FirestoreNeighborhoodNewsRepository {
     }
     final t = title.trim();
     final b = body.trim();
-    if (b.isEmpty) throw StateError('Write something for the newsletter.');
+    if (b.isEmpty && photoUrls.isEmpty && videoUrls.isEmpty) {
+      throw StateError('Add a message or at least one photo or video.');
+    }
     if (t.length > 140) throw StateError('Title is too long.');
     if (b.length > 2000) throw StateError('Post is too long (max 2000 characters).');
     if (photoUrls.length > 5) throw StateError('Maximum 5 photos per post.');

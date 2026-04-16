@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:flutter/foundation.dart';
 
 import '../models/user_profile.dart';
 import 'firebase_user_mapper.dart';
@@ -76,7 +77,6 @@ class FirestoreProfileRepository {
       longitude: u.longitude,
       petIds: u.petIds,
       friendUids: u.friendUids,
-      childAges: u.childAges,
       hostCount: u.hostCount,
       attendCount: u.attendCount,
       hostRating: u.hostRating,
@@ -92,6 +92,7 @@ class FirestoreProfileRepository {
     if (!FirestorePetRepository.isShareableMediaUrl(u.photoUrl)) {
       m['photoUrl'] = FieldValue.delete();
     }
+    m['childAges'] = FieldValue.delete();
     await _profiles.doc(u.id).set(m, SetOptions(merge: true));
   }
 
@@ -202,12 +203,81 @@ class FirestoreProfileRepository {
     await batch.commit();
   }
 
-  /// Broadcast a shout message to all friends via DMs.
+  /// Broadcast a shout as **one** group conversation with all friends, one message.
+  /// The message body starts with friend display names separated by commas, then the text.
   static Future<void> broadcastShout({
     required String fromUid,
-    required String fromName,
     required List<String> friendUids,
     required String message,
+  }) async {
+    final friends = friendUids.where((id) => id != fromUid).toSet().toList();
+    if (friends.isEmpty) return;
+
+    final names = <String>[];
+    for (final uid in friends) {
+      final p = await fetchProfile(uid);
+      final n = p?.displayName.trim();
+      names.add(n != null && n.isNotEmpty ? n : 'Friend');
+    }
+    final recipientsLabel = names.join(', ');
+    var body = '$recipientsLabel: ${message.trim()}';
+    if (body.length > 2000) {
+      body = body.substring(0, 2000);
+    }
+
+    String convId;
+    try {
+      convId = await FirestoreMessageRepository.ensureGroupConversation([
+        fromUid,
+        ...friends,
+      ]);
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied' && friends.length > 1) {
+        // Rules in Firebase may still require exactly two participants until you deploy
+        // the repo’s firestore.rules (2–20). Same shout body to each 1:1 thread.
+        debugPrint(
+          'broadcastShout: group conversation denied (${e.code}); '
+          'using per-friend DMs. Deploy latest firestore.rules for one group thread.',
+        );
+        await _broadcastShoutPerFriendDms(
+          fromUid: fromUid,
+          friendUids: friends,
+          body: body,
+        );
+        return;
+      }
+      rethrow;
+    }
+
+    try {
+      await FirestoreMessageRepository.sendMessage(
+        conversationId: convId,
+        fromUid: fromUid,
+        body: body,
+        isShout: true,
+      );
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied' && friends.length > 1) {
+        debugPrint(
+          'broadcastShout: group message denied (${e.code}); '
+          'using per-friend DMs. Deploy latest firestore.rules.',
+        );
+        await _broadcastShoutPerFriendDms(
+          fromUid: fromUid,
+          friendUids: friends,
+          body: body,
+        );
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  /// Same [body] to each 1:1 thread (used when group conversation create is denied by rules).
+  static Future<void> _broadcastShoutPerFriendDms({
+    required String fromUid,
+    required List<String> friendUids,
+    required String body,
   }) async {
     for (final friendUid in friendUids) {
       final convId =
@@ -215,7 +285,7 @@ class FirestoreProfileRepository {
       await FirestoreMessageRepository.sendMessage(
         conversationId: convId,
         fromUid: fromUid,
-        body: message,
+        body: body,
         isShout: true,
       );
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../config/theme.dart';
 import '../models/meetup.dart';
+import 'paw_party_pizza_icon.dart';
 
 class MeetupCard extends StatelessWidget {
   final Meetup meetup;
@@ -12,6 +13,8 @@ class MeetupCard extends StatelessWidget {
   final String? guestSummaryOverride;
   final VoidCallback? onHostInviteMore;
   final VoidCallback? onHostManageGuests;
+  /// Opens party details / guest list when the user taps outside inline actions.
+  final VoidCallback? onTap;
 
   const MeetupCard({
     super.key,
@@ -21,35 +24,35 @@ class MeetupCard extends StatelessWidget {
     this.guestSummaryOverride,
     this.onHostInviteMore,
     this.onHostManageGuests,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final isHosting =
         currentUserId != null && meetup.hostId == currentUserId;
+    final hostCanInviteOrDelete = meetup.hasNotEnded;
     final dateStr = DateFormat('EEE, MMM d').format(meetup.dateTime);
     final timeStr = DateFormat('h:mm a').format(meetup.dateTime);
 
-    return Container(
-      width: 280,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: PawPartyColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isHosting
-              ? PawPartyColors.primary.withValues(alpha: 0.3)
-              : PawPartyColors.divider.withValues(alpha: 0.5),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+    final decoration = BoxDecoration(
+      color: PawPartyColors.surface,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: isHosting
+            ? PawPartyColors.primary.withValues(alpha: 0.3)
+            : PawPartyColors.divider.withValues(alpha: 0.5),
       ),
-      child: Column(
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.03),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    );
+
+    final column = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -71,7 +74,7 @@ class MeetupCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (isHosting && onHostDelete != null) ...[
+              if (isHosting && hostCanInviteOrDelete && onHostDelete != null) ...[
                 const SizedBox(width: 4),
                 IconButton(
                   onPressed: () => onHostDelete!(meetup),
@@ -139,24 +142,33 @@ class MeetupCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Icon(Icons.local_pizza, size: 16, color: PawPartyColors.pizzaGold),
-              const SizedBox(width: 2),
-              Flexible(
-                child: Text(
-                  meetup.pizzaCommitment.pizzaPartner ?? 'Pizza included',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: PawPartyColors.pizzaGold,
+              if (meetup.pizzaCommitment.foodSummaryForCard.isNotEmpty) ...[
+                if (meetup.pizzaCommitment.willProvidePizza) ...[
+                  const PawPartyPizzaIcon(size: 16),
+                  const SizedBox(width: 2),
+                ] else if (meetup.pizzaCommitment.willIncludePotluck) ...[
+                  Icon(Icons.restaurant_menu,
+                      size: 16, color: PawPartyColors.pizzaGold),
+                  const SizedBox(width: 2),
+                ],
+                Flexible(
+                  child: Text(
+                    meetup.pizzaCommitment.foodSummaryForCard,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: PawPartyColors.pizzaGold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
                 ),
-              ),
+              ],
             ],
           ),
           if (isHosting &&
+              hostCanInviteOrDelete &&
               (onHostInviteMore != null || onHostManageGuests != null)) ...[
             const SizedBox(height: 10),
             Row(
@@ -189,7 +201,33 @@ class MeetupCard extends StatelessWidget {
             ),
           ],
         ],
-      ),
+      );
+
+    if (onTap != null) {
+      return SizedBox(
+        width: 280,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Ink(
+              decoration: decoration,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: column,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 280,
+      padding: const EdgeInsets.all(16),
+      decoration: decoration,
+      child: column,
     );
   }
 

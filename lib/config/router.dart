@@ -24,6 +24,8 @@ import '../screens/friends/friends_screen.dart';
 import '../screens/friends/friend_profile_screen.dart';
 import '../screens/meetup/invite_friends_screen.dart';
 import '../screens/meetup/manage_party_guests_screen.dart';
+import '../screens/meetup/my_parties_list_screen.dart';
+import '../screens/meetup/party_invitations_list_screen.dart';
 import '../screens/neighborhood_news/neighborhood_news_compose_screen.dart';
 import '../screens/neighborhood_news/neighborhood_news_feed_screen.dart';
 import '../screens/moderation/chat_safety_moderation_screen.dart';
@@ -93,10 +95,13 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/passport',
-          pageBuilder: (context, state) => NoTransitionPage(
-            key: state.pageKey,
-            child: const PassportScreen(),
-          ),
+          pageBuilder: (context, state) {
+            final meetupId = state.uri.queryParameters['meetupId'];
+            return NoTransitionPage(
+              key: ValueKey('passport-${meetupId ?? ''}'),
+              child: PassportScreen(initialMeetupId: meetupId),
+            );
+          },
         ),
         GoRoute(
           path: '/neighborhood-news',
@@ -110,6 +115,20 @@ final appRouter = GoRouter(
           pageBuilder: (context, state) => CupertinoPage<void>(
             key: state.pageKey,
             child: const ProfileScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/my-parties',
+          pageBuilder: (context, state) => CupertinoPage<void>(
+            key: state.pageKey,
+            child: const MyPartiesListScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/party-invitations',
+          pageBuilder: (context, state) => CupertinoPage<void>(
+            key: state.pageKey,
+            child: const PartyInvitationsListScreen(),
           ),
         ),
       ],
@@ -170,9 +189,17 @@ final appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: '/conversation/:conversationId',
+      pageBuilder: (context, state) => CupertinoPage(
+        child: ChatScreen.conversation(
+          conversationId: state.pathParameters['conversationId']!,
+        ),
+      ),
+    ),
+    GoRoute(
       path: '/chat/:friendUid',
       pageBuilder: (context, state) => CupertinoPage(
-        child: ChatScreen(friendUid: state.pathParameters['friendUid']!),
+        child: ChatScreen.friend(friendUid: state.pathParameters['friendUid']!),
       ),
     ),
     GoRoute(

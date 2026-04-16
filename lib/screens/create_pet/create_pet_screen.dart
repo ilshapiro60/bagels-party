@@ -8,7 +8,10 @@ import 'package:uuid/uuid.dart';
 import '../../config/map_platform.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
+import '../../config/firebase_bootstrap.dart';
+import '../../models/neighborhood_news.dart';
 import '../../models/pet.dart';
+import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/fullscreen_video.dart';
@@ -16,6 +19,7 @@ import '../../widgets/paw_file_image.dart';
 import '../../widgets/paw_video_thumb.dart';
 import '../../widgets/personality_slider.dart';
 import '../../services/firebase_storage_service.dart';
+import '../../services/firestore_neighborhood_news_repository.dart';
 import '../../services/firestore_pet_repository.dart';
 import '../../services/vet_clinic_geocode.dart';
 import '../vet_clinic_map_picker_screen.dart';
@@ -77,6 +81,26 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
 
   static bool _isRemoteMedia(String path) {
     return FirestorePetRepository.isShareableMediaUrl(path);
+  }
+
+  static const _newsVideoExtensions = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.m4v'];
+
+  static bool _isVideoMediaUrl(String url) {
+    final lower = url.split('?').first.toLowerCase();
+    return _newsVideoExtensions.any((ext) => lower.endsWith(ext));
+  }
+
+  static void _registerNewMediaForNewsletter(
+    List<String> photoBucket,
+    List<String> videoBucket,
+    String url,
+  ) {
+    if (!FirestorePetRepository.isShareableMediaUrl(url)) return;
+    if (_isVideoMediaUrl(url)) {
+      if (videoBucket.length < 3) videoBucket.add(url);
+    } else {
+      if (photoBucket.length < 5) photoBucket.add(url);
+    }
   }
 
   void _snackMediaUploadFailed() {
@@ -329,6 +353,8 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
     try {
       final storage = FirebaseStorageService.instance;
       final petId = isEdit ? _baselinePet!.id : const Uuid().v4();
+      final newNewsletterPhotoUrls = <String>[];
+      final newNewsletterVideoUrls = <String>[];
 
       String? photoUrl;
       final prof = _profilePhotoPath;
@@ -348,6 +374,11 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
               return;
             }
             photoUrl = uploaded;
+            _registerNewMediaForNewsletter(
+              newNewsletterPhotoUrls,
+              newNewsletterVideoUrls,
+              uploaded,
+            );
           } on FirebaseException catch (e) {
             if (!mounted) return;
             _snackStorageFailed(e);
@@ -379,6 +410,11 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
               return;
             }
             photoGallery.add(uploaded);
+            _registerNewMediaForNewsletter(
+              newNewsletterPhotoUrls,
+              newNewsletterVideoUrls,
+              uploaded,
+            );
           } on FirebaseException catch (e) {
             if (!mounted) return;
             _snackStorageFailed(e);
@@ -407,6 +443,11 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
               return;
             }
             videoPaths.add(uploaded);
+            _registerNewMediaForNewsletter(
+              newNewsletterPhotoUrls,
+              newNewsletterVideoUrls,
+              uploaded,
+            );
           } on FirebaseException catch (e) {
             if (!mounted) return;
             _snackStorageFailed(e);
@@ -502,13 +543,71 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
+
+      await _publishNewPetMediaToAreaNewsletter(
+        user: user,
+        pet: pet,
+        photoUrls: newNewsletterPhotoUrls,
+        videoUrls: newNewsletterVideoUrls,
+      );
+
       if (isEdit) {
-        context.pop();
+        if (mounted) context.pop();
       } else {
-        context.go('/home');
+        if (mounted) context.go('/home');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// When the owner uploads new photos/videos for a pet, mirror them to the Area newsletter.
+  Future<void> _publishNewPetMediaToAreaNewsletter({
+    required UserProfile user,
+    required Pet pet,
+    required List<String> photoUrls,
+    required List<String> videoUrls,
+  }) async {
+    if (!isFirebaseInitialized) return;
+    if (photoUrls.isEmpty && videoUrls.isEmpty) return;
+    if (user.neighborhoodKey.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pet saved. Set your neighborhood in Profile to share new pet media on the Area newsletter.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+    final parts = user.displayName.trim().split(RegExp(r'\s+'));
+    final first = parts.firstWhere((s) => s.isNotEmpty, orElse: () => 'A neighbor');
+    final mediaKind = photoUrls.isNotEmpty && videoUrls.isNotEmpty
+        ? 'photos and a video'
+        : (photoUrls.isNotEmpty ? 'photos' : 'a video clip');
+    final body = '$first added new $mediaKind of ${pet.name} (${pet.type}).';
+
+    try {
+      await FirestoreNeighborhoodNewsRepository.createPost(
+        author: user,
+        title: '${pet.name} — new media',
+        body: body,
+        category: NewsCategory.general.id,
+        photoUrls: photoUrls,
+        videoUrls: videoUrls,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Pet saved; Area newsletter post failed: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -793,10 +892,23 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              'A new profile photo you save is also shared on the Area newsletter when your neighborhood is set.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: PawPartyColors.textHint, height: 1.35),
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
             'Gallery & clips',
             style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'New photos and videos you upload here are also posted to the Area newsletter when your neighborhood is set in Profile.',
+            style: TextStyle(fontSize: 12, color: PawPartyColors.textHint, height: 1.35),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -989,8 +1101,14 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
 
   Widget _buildCounter(
       String label, int value, int min, int max, ValueChanged<int> onChanged) {
+    final iconStyle = IconButton.styleFrom(
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: Size.zero,
+      padding: const EdgeInsets.all(6),
+      visualDensity: VisualDensity.compact,
+    );
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
       decoration: BoxDecoration(
         color: PawPartyColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -1001,19 +1119,26 @@ class _CreatePetScreenState extends ConsumerState<CreatePetScreen> {
           Text(label, style: TextStyle(fontSize: 13, color: PawPartyColors.textSecondary)),
           const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.remove_circle_outline, size: 24),
+                style: iconStyle,
+                icon: const Icon(Icons.remove_circle_outline, size: 22),
                 onPressed: value > min ? () => onChanged(value - 1) : null,
                 color: PawPartyColors.primary,
               ),
-              Text(
-                '$value',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Text(
+                  '$value',
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
+                  softWrap: false,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
               ),
               IconButton(
-                icon: const Icon(Icons.add_circle_outline, size: 24),
+                style: iconStyle,
+                icon: const Icon(Icons.add_circle_outline, size: 22),
                 onPressed: value < max ? () => onChanged(value + 1) : null,
                 color: PawPartyColors.primary,
               ),

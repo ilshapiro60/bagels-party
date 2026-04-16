@@ -1,8 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../config/theme.dart';
+import 'paw_party_pizza_icon.dart';
 
 class NavShell extends StatelessWidget {
   final Widget child;
@@ -90,8 +89,8 @@ class NavShell extends StatelessWidget {
     );
   }
 
-  /// Host CTA: slightly larger than tab icons, inside a circle (gradient pizza).
-  static const double _hostCircleDiameter = 50;
+  /// Host CTA: slightly larger than tab icons, inside a circle (pizza graphic).
+  static const double _hostCircleDiameter = 58;
 
   Widget _hostNavItem(BuildContext context) {
     return Expanded(
@@ -127,58 +126,7 @@ class NavShell extends StatelessWidget {
                   ],
                 ),
                 alignment: Alignment.center,
-                child: ShaderMask(
-                  blendMode: BlendMode.srcIn,
-                  shaderCallback: (bounds) => SweepGradient(
-                    center: Alignment.center,
-                    startAngle: 0,
-                    endAngle: 2 * math.pi,
-                    tileMode: TileMode.clamp,
-                    colors: const [
-                      Color(0xFFFFF59D),
-                      Color(0xFFFFEA00),
-                      Color(0xFFFF9100),
-                      Color(0xFFFF6D00),
-                      Color(0xFFFF3D00),
-                      Color(0xFFFF1744),
-                      Color(0xFFFF4081),
-                      PawPartyColors.bloomPink,
-                      Color(0xFFE040FB),
-                      Color(0xFF7C4DFF),
-                      Color(0xFF536DFE),
-                      Color(0xFF00B0FF),
-                      Color(0xFF00E5FF),
-                      Color(0xFF1DE9B6),
-                      Color(0xFF00E676),
-                      Color(0xFF76FF03),
-                      Color(0xFFFFEA00),
-                    ],
-                    stops: const [
-                      0.0,
-                      0.06,
-                      0.12,
-                      0.2,
-                      0.28,
-                      0.36,
-                      0.44,
-                      0.52,
-                      0.58,
-                      0.64,
-                      0.7,
-                      0.76,
-                      0.82,
-                      0.88,
-                      0.93,
-                      0.97,
-                      1.0,
-                    ],
-                  ).createShader(bounds),
-                  child: const Icon(
-                    Icons.local_pizza,
-                    size: 30,
-                    color: Colors.white,
-                  ),
-                ),
+                child: PawPartyPizzaIcon(size: 34),
               ),
             ),
             const SizedBox(height: 1),

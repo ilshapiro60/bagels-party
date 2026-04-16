@@ -12,7 +12,10 @@ import '../../services/firestore_passport_repository.dart';
 import '../../widgets/passport_entry_card.dart';
 
 class PassportScreen extends ConsumerStatefulWidget {
-  const PassportScreen({super.key});
+  const PassportScreen({super.key, this.initialMeetupId});
+
+  /// When set (e.g. from `/passport?meetupId=`), Journal opens filtered to this party.
+  final String? initialMeetupId;
 
   @override
   ConsumerState<PassportScreen> createState() => _PassportScreenState();
@@ -25,11 +28,17 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
   final _journalSearch = TextEditingController();
   final _communitySearch = TextEditingController();
 
+  /// Non-null → journal list only shows entries for this meetup (from deep link).
+  String? _meetupJournalFilter;
+  bool _autoPetForMeetupDone = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    final raw = widget.initialMeetupId?.trim();
+    _meetupJournalFilter = (raw != null && raw.isNotEmpty) ? raw : null;
   }
 
   @override
@@ -60,6 +69,36 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
           e.behaviorNotes?.toLowerCase().contains(q) == true ||
           e.metPetNames.any((n) => n.toLowerCase().contains(q));
     }).toList();
+  }
+
+  void _maybeSelectPetForMeetupFilter(List<PassportEntry> allEntries) {
+    if (_autoPetForMeetupDone || _meetupJournalFilter == null) return;
+    final filter = _meetupJournalFilter!;
+    if (allEntries.isEmpty) {
+      _autoPetForMeetupDone = true;
+      return;
+    }
+    final subset = allEntries.where((e) => e.meetupId == filter).toList();
+    _autoPetForMeetupDone = true;
+    if (subset.isEmpty) return;
+    final petIds = subset.map((e) => e.petId).toSet();
+    final pets = ref.read(userPetsProvider);
+    final idx = pets.indexWhere((p) => petIds.contains(p.id));
+    if (idx < 0 || idx == _selectedPetIndex) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _selectedPetIndex = idx);
+    });
+  }
+
+  List<PassportEntry> _entriesForJournal(
+    List<PassportEntry> entries,
+    Pet? pet,
+  ) {
+    var list = pet != null ? entries.where((e) => e.petId == pet.id) : entries;
+    if (_meetupJournalFilter != null) {
+      list = list.where((e) => e.meetupId == _meetupJournalFilter);
+    }
+    return list.toList();
   }
 
   void _editEntry(PassportEntry entry) {
@@ -319,16 +358,40 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
             onChanged: (_) => setState(() {}),
           ),
         ),
+        if (_meetupJournalFilter != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InputChip(
+                avatar: Icon(Icons.celebration, size: 18, color: PawPartyColors.primary),
+                label: Text(
+                  'This party',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: PawPartyColors.textPrimary,
+                  ),
+                ),
+                deleteIcon: const Icon(Icons.close, size: 18),
+                onDeleted: () => setState(() => _meetupJournalFilter = null),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
         Expanded(
           child: myAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Could not load: $e')),
             data: (entries) {
-              final forPet = pet != null
-                  ? entries.where((e) => e.petId == pet.id).toList()
-                  : entries;
+              _maybeSelectPetForMeetupFilter(entries);
+              final forPet = _entriesForJournal(entries, pet);
               final filtered = _filterEntries(forPet, _journalSearch.text);
               if (filtered.isEmpty) {
+                final partyOnlyEmpty = _meetupJournalFilter != null &&
+                    forPet.isEmpty &&
+                    entries.isNotEmpty;
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -336,7 +399,11 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
                       Icon(Icons.auto_stories, size: 64, color: PawPartyColors.textHint),
                       const SizedBox(height: 16),
                       Text(
-                        entries.isEmpty ? 'No entries yet' : 'No matches',
+                        entries.isEmpty
+                            ? 'No entries yet'
+                            : partyOnlyEmpty
+                                ? 'No entries for this party'
+                                : 'No matches',
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                               color: PawPartyColors.textHint,
                             ),
@@ -345,7 +412,9 @@ class _PassportScreenState extends ConsumerState<PassportScreen>
                       Text(
                         entries.isEmpty
                             ? 'Tap Add entry to log a party.'
-                            : 'Try a different search.',
+                            : partyOnlyEmpty
+                                ? 'Try another pet above, or clear the party filter.'
+                                : 'Try a different search.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: PawPartyColors.textSecondary),
                       ),

@@ -17,6 +17,7 @@ import '../../utils/pet_compatibility.dart';
 import '../../widgets/community_vet_clinics_map.dart';
 import '../../widgets/nearby_pets_map.dart';
 import '../../widgets/pet_card.dart';
+import '../../widgets/paw_party_pizza_icon.dart';
 
 class DiscoverScreen extends ConsumerStatefulWidget {
   const DiscoverScreen({super.key, this.initialTab = 0});
@@ -1117,9 +1118,22 @@ class _EventDetailSheetState extends State<_EventDetailSheet> {
                 if (m.kidFriendly)
                   _chipTag('Kid-friendly', Icons.child_friendly),
                 if (m.pizzaCommitment.willProvidePizza)
-                  _chipTag('Pizza provided', Icons.local_pizza),
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    avatar: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: PawPartyPizzaIcon(size: 14),
+                    ),
+                    label: const Text(
+                      'Pizza provided',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ),
                 if (m.pizzaCommitment.willProvideDrinks)
                   _chipTag('Drinks provided', Icons.local_drink),
+                if (m.pizzaCommitment.willIncludePotluck)
+                  _chipTag('Potluck welcome', Icons.restaurant_menu),
               ],
             ),
             const SizedBox(height: 20),

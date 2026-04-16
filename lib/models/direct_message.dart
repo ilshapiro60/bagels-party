@@ -67,6 +67,13 @@ class Conversation {
   String otherUid(String myUid) =>
       participants.firstWhere((u) => u != myUid, orElse: () => myUid);
 
+  /// True when more than two people are in the thread (group chat).
+  bool get isGroupChat => participants.length > 2;
+
+  /// Other members besides [myUid] (any order).
+  List<String> otherParticipantUids(String myUid) =>
+      participants.where((u) => u != myUid).toList();
+
   /// Whether the given user has unread messages.
   bool hasUnread(String myUid) {
     if (lastMessage == null) return false;

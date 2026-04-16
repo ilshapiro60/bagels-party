@@ -4,6 +4,19 @@
 /// 2. Copy your Publishable Key (pk_test_... or pk_live_...)
 /// 3. Set the Secret Key on your Firebase Cloud Function environment
 ///    (never embed the secret key in client code)
+///
+/// **Production checklist**
+/// - Users must be signed in with **Firebase Auth** before pay; [IapService]
+///   refreshes the ID token before calling `createPaymentIntent`.
+/// - Deploy the callable with **invoker: authenticated** (default for callable)
+///   and verify `context.auth` in the function.
+/// - Use **live** Stripe keys in the client for store release builds; Google Pay
+///   uses `testEnv: false` when `kReleaseMode` is true ([IapService]).
+///
+/// **Local testing without Stripe / Functions**
+/// - Run with `--dart-define=SKIP_PARTY_PAYMENT=true` (debug/profile only;
+///   release builds throw if this define is set). Skips Payment Sheet and the
+///   callable so you can publish meetups without enabling billing.
 class StripeConfig {
   StripeConfig._();
 

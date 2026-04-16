@@ -46,7 +46,7 @@ class FriendOwnerChip extends ConsumerWidget {
               : Text(
                   p.displayName.isNotEmpty ? p.displayName[0] : '?',
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
                     color: PawPartyColors.primary,
                   ),
@@ -58,7 +58,7 @@ class FriendOwnerChip extends ConsumerWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         );
 
         if (!openFullscreenOnAvatarTap) {

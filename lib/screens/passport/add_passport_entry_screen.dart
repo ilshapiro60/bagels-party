@@ -16,6 +16,7 @@ import '../../services/firestore_passport_repository.dart';
 import '../../services/firestore_pet_repository.dart';
 import '../../utils/media_picker_utils.dart';
 import '../../widgets/paw_file_image.dart';
+import '../../widgets/paw_video_thumb.dart';
 
 class AddPassportEntryScreen extends ConsumerStatefulWidget {
   const AddPassportEntryScreen({
@@ -54,6 +55,9 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
   bool _isPublic = false;
   final List<String> _localPhotoPaths = [];
   final List<String> _existingPhotoUrls = [];
+  final List<String> _localVideoPaths = [];
+  final List<String> _existingVideoUrls = [];
+  static const _maxVideos = 3;
   bool _saving = false;
   DateTime _partyDate = DateTime.now();
 
@@ -76,6 +80,7 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
       _isPublic = existing.isPublic;
       _partyDate = existing.date;
       _existingPhotoUrls.addAll(existing.photoUrls);
+      _existingVideoUrls.addAll(existing.videoPaths);
       _useLinkedMeetup = false;
     }
 
@@ -155,6 +160,49 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
     }
   }
 
+  Future<void> _addVideo() async {
+    final used = _existingVideoUrls.length + _localVideoPaths.length;
+    if (used >= _maxVideos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Maximum $_maxVideos videos per entry.')),
+      );
+      return;
+    }
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.video_library_outlined),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || source == null) return;
+    try {
+      final path = source == ImageSource.gallery
+          ? await pickVideoFromGallery()
+          : await pickVideoFromCamera();
+      if (path != null) setState(() => _localVideoPaths.add(path));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not add video: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _pickPartyDate() async {
     final d = await showDatePicker(
       context: context,
@@ -220,6 +268,7 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
     final isCreate = widget.existingEntry == null;
     final storage = FirebaseStorageService.instance;
     final photoUrls = <String>[..._existingPhotoUrls];
+    final videoPaths = <String>[..._existingVideoUrls];
 
     setState(() => _saving = true);
     try {
@@ -240,6 +289,25 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
           return;
         }
         photoUrls.add(url);
+      }
+
+      for (final path in _localVideoPaths) {
+        final url = await storage.uploadPassportMedia(
+          localPath: path,
+          entryId: entryId,
+          allowLocalFallback: false,
+        );
+        if (!FirestorePetRepository.isShareableMediaUrl(url)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Video upload failed. Check connection and try again.'),
+              ),
+            );
+          }
+          return;
+        }
+        videoPaths.add(url);
       }
 
       final searchText = PassportEntry.buildSearchText(
@@ -266,7 +334,7 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
         behaviorNotes: notes,
         playOutcome: _outcome,
         photoUrls: photoUrls,
-        videoPaths: const [],
+        videoPaths: videoPaths,
         wasAnxious: _wasAnxious,
         playedWell: _playedWell,
         warmUpMinutes: warmUp.clamp(0, 999),
@@ -338,6 +406,7 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
     }
 
     final pet = _selectedPet ?? pets.first;
+    final videoCount = _existingVideoUrls.length + _localVideoPaths.length;
 
     return Scaffold(
         appBar: AppBar(
@@ -595,6 +664,81 @@ class _AddPassportEntryScreenState extends ConsumerState<AddPassportEntryScreen>
                 onPressed: _addPhoto,
                 icon: const Icon(Icons.add_photo_alternate),
                 label: const Text('Add photo'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text('Videos', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ..._existingVideoUrls.map(
+                (url) => Stack(
+                  children: [
+                    SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: PawVideoThumbnail(path: url, height: 72),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: GestureDetector(
+                        onTap: () =>
+                            setState(() => _existingVideoUrls.remove(url)),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(Icons.close,
+                              size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ..._localVideoPaths.map(
+                (path) => Stack(
+                  children: [
+                    SizedBox(
+                      width: 72,
+                      height: 72,
+                      child: PawVideoThumbnail(path: path, height: 72),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: GestureDetector(
+                        onTap: () =>
+                            setState(() => _localVideoPaths.remove(path)),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(Icons.close,
+                              size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed:
+                    _saving || videoCount >= _maxVideos ? null : _addVideo,
+                icon: const Icon(Icons.videocam_outlined),
+                label: Text(
+                  videoCount == 0
+                      ? 'Add video'
+                      : 'Add video ($videoCount/$_maxVideos)',
+                ),
               ),
             ],
           ),

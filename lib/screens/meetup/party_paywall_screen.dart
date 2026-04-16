@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -157,6 +158,27 @@ class _PartyPaywallScreenState extends ConsumerState<PartyPaywallScreen> {
                     const SizedBox(height: 24),
                     _summaryCard(context, m),
                     const SizedBox(height: 24),
+                    if (kDebugMode && IapService.skipPartyPaymentRequested) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.amber.shade700),
+                        ),
+                        child: Text(
+                          'Dev only: SKIP_PARTY_PAYMENT is set — Stripe and the '
+                          'payment Cloud Function are skipped. Release builds cannot use this.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: PawPartyColors.textPrimary,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(

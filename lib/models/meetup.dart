@@ -141,6 +141,23 @@ class Meetup {
   /// Displayable location label: venue name if set, otherwise raw address.
   String get venueDisplayName =>
       venueName != null && venueName!.trim().isNotEmpty ? venueName! : address;
+
+  DateTime get endDateTime =>
+      dateTime.add(Duration(minutes: durationMinutes));
+
+  /// Scheduled end is still in the future and the party is not cancelled.
+  bool get hasNotEnded =>
+      status != MeetupStatus.cancelled &&
+      endDateTime.isAfter(DateTime.now());
+}
+
+/// All hosted parties: upcoming / in-progress first (soonest first), then past (most recent first).
+List<Meetup> sortHostedMeetupsFutureFirst(List<Meetup> all) {
+  final upcoming = all.where((m) => m.hasNotEnded).toList()
+    ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+  final past = all.where((m) => !m.hasNotEnded).toList()
+    ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
+  return [...upcoming, ...past];
 }
 
 class MeetupInvite {
@@ -184,6 +201,8 @@ class PizzaCommitment {
   final bool willProvideDrinks;
   final bool willAccommodateAllergies;
   final bool acknowledgesHostDuty;
+  /// Guests may bring a dish to share in addition to (or without) hosted pizza.
+  final bool willIncludePotluck;
   final String? pizzaPartner;
   final String? specialNotes;
 
@@ -192,6 +211,7 @@ class PizzaCommitment {
     this.willProvideDrinks = false,
     this.willAccommodateAllergies = false,
     this.acknowledgesHostDuty = false,
+    this.willIncludePotluck = false,
     this.pizzaPartner,
     this.specialNotes,
   });
@@ -202,12 +222,30 @@ class PizzaCommitment {
       willAccommodateAllergies &&
       acknowledgesHostDuty;
 
+  /// Compact label for meetup cards (pizza and potluck can both apply).
+  String get foodSummaryForCard {
+    if (willProvidePizza && willIncludePotluck) {
+      final p = (pizzaPartner?.trim().isNotEmpty ?? false)
+          ? pizzaPartner!.trim()
+          : 'Pizza included';
+      return '$p + potluck';
+    }
+    if (willProvidePizza) {
+      return (pizzaPartner?.trim().isNotEmpty ?? false)
+          ? pizzaPartner!.trim()
+          : 'Pizza included';
+    }
+    if (willIncludePotluck) return 'Potluck welcome';
+    return '';
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'willProvidePizza': willProvidePizza,
       'willProvideDrinks': willProvideDrinks,
       'willAccommodateAllergies': willAccommodateAllergies,
       'acknowledgesHostDuty': acknowledgesHostDuty,
+      'willIncludePotluck': willIncludePotluck,
       'pizzaPartner': pizzaPartner,
       'specialNotes': specialNotes,
     };
@@ -219,6 +257,7 @@ class PizzaCommitment {
       willProvideDrinks: map['willProvideDrinks'] as bool? ?? false,
       willAccommodateAllergies: map['willAccommodateAllergies'] as bool? ?? false,
       acknowledgesHostDuty: map['acknowledgesHostDuty'] as bool? ?? false,
+      willIncludePotluck: map['willIncludePotluck'] as bool? ?? false,
       pizzaPartner: map['pizzaPartner'] as String?,
       specialNotes: map['specialNotes'] as String?,
     );

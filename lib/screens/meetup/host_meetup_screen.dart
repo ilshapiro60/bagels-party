@@ -15,6 +15,7 @@ import '../../services/firestore_profile_repository.dart';
 import '../../utils/hosting_fee.dart';
 import '../../widgets/host_venue_map.dart';
 import '../../widgets/pizza_commitment.dart';
+import '../../widgets/paw_party_pizza_icon.dart';
 import 'party_paywall_screen.dart';
 
 class HostMeetupScreen extends ConsumerStatefulWidget {
@@ -50,6 +51,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
   bool _willProvideDrinks = false;
   bool _willAccommodateAllergies = false;
   bool _acknowledgesHostDuty = false;
+  bool _willIncludePotluck = false;
   bool _creating = false;
 
   @override
@@ -186,6 +188,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
         willProvideDrinks: _willProvideDrinks,
         willAccommodateAllergies: _willAccommodateAllergies,
         acknowledgesHostDuty: _acknowledgesHostDuty,
+        willIncludePotluck: _willIncludePotluck,
       ),
       status: MeetupStatus.open,
       hasYard: _hasYard,
@@ -704,10 +707,12 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
             willProvideDrinks: _willProvideDrinks,
             willAccommodateAllergies: _willAccommodateAllergies,
             acknowledgesHostDuty: _acknowledgesHostDuty,
+            willIncludePotluck: _willIncludePotluck,
             onPizzaChanged: (v) => setState(() => _willProvidePizza = v),
             onDrinksChanged: (v) => setState(() => _willProvideDrinks = v),
             onAllergiesChanged: (v) => setState(() => _willAccommodateAllergies = v),
             onHostDutyChanged: (v) => setState(() => _acknowledgesHostDuty = v),
+            onPotluckChanged: (v) => setState(() => _willIncludePotluck = v),
           ),
           const SizedBox(height: 24),
           Container(
@@ -724,7 +729,7 @@ class _HostMeetupScreenState extends ConsumerState<HostMeetupScreen> {
             ),
             child: Column(
               children: [
-                const Icon(Icons.local_pizza, size: 40, color: PawPartyColors.pizzaGold),
+                const PawPartyPizzaIcon(size: 40),
                 const SizedBox(height: 12),
                 Text(
                   'Order from a partner restaurant',
