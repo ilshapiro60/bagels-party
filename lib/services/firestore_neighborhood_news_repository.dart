@@ -144,6 +144,36 @@ class FirestoreNeighborhoodNewsRepository {
     });
   }
 
+  /// Recent posts with media (video or photo) from areas OTHER than [excludeAreaKey].
+  /// Used to fill the video feed when local content is sparse.
+  static Future<List<NeighborhoodNewsPost>> fetchMediaPostsGlobally({
+    required String excludeAreaKey,
+    int limit = 30,
+    int retentionDays = 30,
+  }) async {
+    final cutoff = DateTime.now().subtract(Duration(days: retentionDays));
+    final snap = await _db
+        .collection(_posts)
+        .where('hidden', isEqualTo: false)
+        .where('createdAt', isGreaterThan: Timestamp.fromDate(cutoff))
+        .orderBy('createdAt', descending: true)
+        .limit(100)
+        .get();
+    final all = snap.docs.map(NeighborhoodNewsPost.fromDoc).toList();
+    final withMedia = all
+        .where((p) =>
+            p.areaKey != excludeAreaKey &&
+            (p.videoUrls.isNotEmpty || p.photoUrls.isNotEmpty))
+        .toList();
+    // Videos first, then photos
+    withMedia.sort((a, b) {
+      final av = a.videoUrls.isNotEmpty ? 0 : 1;
+      final bv = b.videoUrls.isNotEmpty ? 0 : 1;
+      return av.compareTo(bv);
+    });
+    return withMedia.take(limit).toList();
+  }
+
   static Stream<List<NeighborhoodNewsReport>> watchPendingReports() {
     return _db
         .collection(_reports)

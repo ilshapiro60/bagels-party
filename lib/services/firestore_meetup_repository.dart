@@ -81,6 +81,22 @@ class FirestoreMeetupRepository {
     return meetupFromSnapshot(snap);
   }
 
+  static Future<void> updateMeetup({
+    required String meetupId,
+    required String actingHostId,
+    required String title,
+    String? description,
+    required DateTime dateTime,
+    required int durationMinutes,
+  }) async {
+    await _meetups.doc(meetupId).update({
+      'title': title.trim(),
+      'description': description?.trim(),
+      'dateTime': Timestamp.fromDate(dateTime),
+      'durationMinutes': durationMinutes,
+    });
+  }
+
   /// Removes the party document. Only the host may delete ([actingHostId]).
   static Future<void> deleteMeetup({
     required String meetupId,

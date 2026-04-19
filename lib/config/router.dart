@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/meetup.dart';
 import '../models/neighborhood_news.dart';
 import '../models/passport_entry.dart';
 import '../models/pet.dart';
@@ -9,10 +10,15 @@ import '../providers/app_providers.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/onboarding_screen.dart';
+import '../screens/feed/feed_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/discover/discover_screen.dart';
 import '../screens/discover/community_vet_clinics_screen.dart';
 import '../screens/create_pet/create_pet_screen.dart';
+import '../screens/meetup/edit_party_screen.dart';
+import '../screens/settings/about_screen.dart';
+import '../screens/settings/help_support_screen.dart';
+import '../screens/settings/privacy_safety_screen.dart';
 import '../screens/meetup/host_meetup_screen.dart';
 import '../screens/passport/passport_screen.dart';
 import '../screens/passport/add_passport_entry_screen.dart';
@@ -134,6 +140,12 @@ final appRouter = GoRouter(
       ],
     ),
     GoRoute(
+      path: '/feed',
+      pageBuilder: (context, state) => CupertinoPage(
+        child: const FeedScreen(),
+      ),
+    ),
+    GoRoute(
       path: '/community-vet-clinics',
       pageBuilder: (context, state) => CupertinoPage(
         child: const CommunityVetClinicsScreen(),
@@ -167,6 +179,28 @@ final appRouter = GoRouter(
       pageBuilder: (context, state) => CupertinoPage(
         child: const HostMeetupScreen(),
       ),
+    ),
+    GoRoute(
+      path: '/settings/privacy',
+      pageBuilder: (context, state) =>
+          const CupertinoPage(child: PrivacySafetyScreen()),
+    ),
+    GoRoute(
+      path: '/settings/help',
+      pageBuilder: (context, state) =>
+          const CupertinoPage(child: HelpSupportScreen()),
+    ),
+    GoRoute(
+      path: '/settings/about',
+      pageBuilder: (context, state) =>
+          const CupertinoPage(child: AboutScreen()),
+    ),
+    GoRoute(
+      path: '/edit-party/:id',
+      pageBuilder: (context, state) {
+        final meetup = state.extra as Meetup;
+        return CupertinoPage(child: EditPartyScreen(meetup: meetup));
+      },
     ),
     GoRoute(
       path: '/friends',

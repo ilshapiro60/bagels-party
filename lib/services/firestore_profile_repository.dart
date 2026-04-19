@@ -203,6 +203,24 @@ class FirestoreProfileRepository {
     await batch.commit();
   }
 
+  static Future<void> blockUser({
+    required String myUid,
+    required String targetUid,
+  }) async {
+    await _profiles.doc(myUid).update({
+      'blockedUids': FieldValue.arrayUnion([targetUid]),
+    });
+  }
+
+  static Future<void> unblockUser({
+    required String myUid,
+    required String targetUid,
+  }) async {
+    await _profiles.doc(myUid).update({
+      'blockedUids': FieldValue.arrayRemove([targetUid]),
+    });
+  }
+
   /// Broadcast a shout as **one** group conversation with all friends, one message.
   /// The message body starts with friend display names separated by commas, then the text.
   static Future<void> broadcastShout({

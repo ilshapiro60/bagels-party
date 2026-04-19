@@ -29,6 +29,7 @@ class _PizzaSlicePainter extends CustomPainter {
   static const _crustLight = Color(0xFFFFB74D);
   static const _cheese = Color(0xFFFFEB3B);
   static const _pepperoni = Color(0xFFC62828);
+  static const _outline = Color(0xFF5D2E00);
 
   @override
   void paint(Canvas canvas, Size s) {
@@ -49,6 +50,15 @@ class _PizzaSlicePainter extends CustomPainter {
       ..quadraticBezierTo(crustCrown.dx, crustCrown.dy, right.dx, right.dy)
       ..close();
 
+    // Outline border drawn first so it sits under the fill
+    canvas.drawPath(
+      slice,
+      Paint()
+        ..color = _outline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.5, m * 0.06)
+        ..strokeJoin = StrokeJoin.round,
+    );
     canvas.drawPath(slice, Paint()..color = _cheese);
 
     // Pepperoni on cheese (clipped), then crust on top so the wedge reads clearly.

@@ -44,7 +44,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAM1UU--2UnU54RYomva7USI3zdNVp5gGk',
+    apiKey: 'AIzaSyCzvRYDxLjoc2-cJAHOuClIXMQSyoRcRac',
     appId: '1:1073924094679:android:5ab2b340e05d85541ece92',
     messagingSenderId: '1073924094679',
     projectId: 'pawparty-app',

@@ -17,6 +17,7 @@ class UserProfile {
   final List<String> petIds;
   /// UIDs of connected pet parents (paw buddy acceptances, etc.).
   final List<String> friendUids;
+  final List<String> blockedUids;
   final int hostCount;
   final int attendCount;
   final double hostRating;
@@ -44,6 +45,7 @@ class UserProfile {
     this.longitude,
     this.petIds = const [],
     this.friendUids = const [],
+    this.blockedUids = const [],
     this.hostCount = 0,
     this.attendCount = 0,
     this.hostRating = 0.0,
@@ -104,6 +106,7 @@ class UserProfile {
       'longitude': longitude,
       'petIds': petIds,
       'friendUids': friendUids,
+      'blockedUids': blockedUids,
       'hostCount': hostCount,
       'attendCount': attendCount,
       'hostRating': hostRating,
@@ -137,6 +140,7 @@ class UserProfile {
       longitude: (map['longitude'] as num?)?.toDouble(),
       petIds: List<String>.from(map['petIds'] ?? []),
       friendUids: List<String>.from(map['friendUids'] ?? []),
+      blockedUids: List<String>.from(map['blockedUids'] ?? []),
       hostCount: map['hostCount'] as int? ?? 0,
       attendCount: map['attendCount'] as int? ?? 0,
       hostRating: (map['hostRating'] as num?)?.toDouble() ?? 0.0,
@@ -170,6 +174,7 @@ class UserProfile {
       longitude: longitude,
       petIds: petIds,
       friendUids: friendUids,
+      blockedUids: blockedUids,
       hostCount: hostCount,
       attendCount: attendCount,
       hostRating: hostRating,
@@ -198,6 +203,7 @@ class UserProfile {
       longitude: longitude,
       petIds: petIds,
       friendUids: friendUids,
+      blockedUids: blockedUids,
       hostCount: hostCount,
       attendCount: attendCount,
       hostRating: hostRating,
@@ -285,6 +291,35 @@ class UserProfile {
       businessName: clearBusinessFields ? null : (businessName ?? this.businessName),
       businessCategory: clearBusinessFields ? null : (businessCategory ?? this.businessCategory),
       businessPlaceId: clearBusinessFields ? null : (businessPlaceId ?? this.businessPlaceId),
+    );
+  }
+
+  UserProfile copyWithBlockedUids(List<String> blockedUids) {
+    return UserProfile(
+      id: id,
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      ownerGalleryImagePaths: ownerGalleryImagePaths,
+      ownerGalleryVideoPaths: ownerGalleryVideoPaths,
+      neighborhood: neighborhood,
+      neighborhoodKey: neighborhoodKey,
+      isModerator: isModerator,
+      latitude: latitude,
+      longitude: longitude,
+      petIds: petIds,
+      friendUids: friendUids,
+      blockedUids: blockedUids,
+      hostCount: hostCount,
+      attendCount: attendCount,
+      hostRating: hostRating,
+      guestRating: guestRating,
+      createdAt: createdAt,
+      bio: bio,
+      isBusinessAccount: isBusinessAccount,
+      businessName: businessName,
+      businessCategory: businessCategory,
+      businessPlaceId: businessPlaceId,
     );
   }
 

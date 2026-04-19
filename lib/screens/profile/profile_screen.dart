@@ -576,12 +576,27 @@ class ProfileScreen extends ConsumerWidget {
         _menuItem(
           Icons.notifications_outlined,
           'Notifications',
-          null,
+          'Push alerts for parties & messages',
           () => _openNotificationSettings(context),
         ),
-        _menuItem(Icons.privacy_tip_outlined, 'Privacy & Safety', null, () {}),
-        _menuItem(Icons.help_outline, 'Help & Support', null, () {}),
-        _menuItem(Icons.info_outline, 'About ${AppConstants.appName}', null, () {}),
+        _menuItem(
+          Icons.privacy_tip_outlined,
+          'Privacy & Safety',
+          'Account privacy, data & blocked users',
+          () => context.push('/settings/privacy'),
+        ),
+        _menuItem(
+          Icons.help_outline,
+          'Help & Support',
+          'FAQs, contact & feedback',
+          () => context.push('/settings/help'),
+        ),
+        _menuItem(
+          Icons.info_outline,
+          'About ${AppConstants.appName}',
+          'Version, terms & privacy policy',
+          () => context.push('/settings/about'),
+        ),
         const SizedBox(height: 8),
         _menuItem(
           Icons.delete_forever_outlined,

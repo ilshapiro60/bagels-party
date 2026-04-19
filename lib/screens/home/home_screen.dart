@@ -1,15 +1,19 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:video_player/video_player.dart';
 import '../../config/firebase_bootstrap.dart';
 import '../../config/theme.dart';
+import '../../models/feed_item.dart';
 import '../../models/meetup.dart';
-import '../../models/neighborhood_news.dart';
 import '../../models/party_invite.dart';
 import '../../models/user_profile.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/feed_provider.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_meetup_repository.dart';
 import '../../services/firestore_passport_repository.dart';
@@ -37,6 +41,7 @@ class HomeScreen extends ConsumerWidget {
     final userName = authState.user?.displayName ?? 'Friend';
     final areaLabel = authState.user?.neighborhood ?? 'Nearby';
     final photoUrl = authState.user?.photoUrl;
+    final feedItems = ref.watch(feedItemsProvider).value ?? [];
 
     return Scaffold(
       body: SafeArea(
@@ -73,7 +78,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 280,
+                  height: 220,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -133,6 +138,12 @@ class HomeScreen extends ConsumerWidget {
                               meetup: meetup,
                               currentUserId: userId,
                               guestSummaryOverride: guestSummary,
+                              onTitleTap: isHost
+                                  ? () => context.push(
+                                        '/edit-party/${meetup.id}',
+                                        extra: meetup,
+                                      )
+                                  : null,
                               onTap: isHost
                                   ? () {
                                       if (!meetup.hasNotEnded) {
@@ -165,147 +176,16 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ],
-            SliverToBoxAdapter(
-              child: _buildAreaNewsletterSection(context, ref, authState.user),
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+            SliverList.separated(
+              itemCount: feedItems.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 2),
+              itemBuilder: (context, i) => _HomeFeedItem(item: feedItems[i]),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildAreaNewsletterSection(
-    BuildContext context,
-    WidgetRef ref,
-    UserProfile? user,
-  ) {
-    if (user == null) return const SizedBox.shrink();
-
-    if (user.neighborhoodKey.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.forum_outlined, size: 20, color: PawPartyColors.primary),
-                const SizedBox(width: 6),
-                const Text(
-                  'Area newsletter',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Set your neighborhood in Profile to read posts from nearby pet parents.',
-              style: TextStyle(fontSize: 14, height: 1.35, color: PawPartyColors.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => context.push('/profile'),
-              child: const Text('Open Profile'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final postsAsync = ref.watch(neighborhoodNewsPostsProvider);
-    return postsAsync.when(
-      loading: () => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.forum_outlined, size: 20, color: PawPartyColors.primary),
-                const SizedBox(width: 6),
-                const Text(
-                  'Area newsletter',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-      error: (err, st) => const SizedBox.shrink(),
-      data: (posts) {
-        final preview = posts.take(3).toList();
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.forum_outlined, size: 20, color: PawPartyColors.primary),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text(
-                      'Area newsletter',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => context.go('/neighborhood-news'),
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                    child: Text(
-                      posts.isEmpty ? 'Open' : 'See all (${posts.length})',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              if (preview.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: Text(
-                    'No posts in the last 30 days. Share a tip, lost/found pet, or event with neighbors.',
-                    style: TextStyle(fontSize: 14, height: 1.35, color: PawPartyColors.textSecondary),
-                  ),
-                )
-              else
-                ...preview.map(
-                  (p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: _AreaNewsletterPreviewTile(post: p),
-                  ),
-                ),
-              if (isFirebaseInitialized)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () => context.push('/neighborhood-news/new'),
-                    icon: const Icon(Icons.post_add_outlined, size: 18),
-                    label: const Text('Post an update'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: PawPartyColors.primary,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -632,85 +512,155 @@ class HomeScreen extends ConsumerWidget {
 
 }
 
-String _areaNewsletterPreviewLine(NeighborhoodNewsPost p) {
-  final title = p.title?.trim();
-  if (title != null && title.isNotEmpty) return title;
-  final body = p.body.trim();
-  if (body.isNotEmpty) {
-    return body.length > 72 ? '${body.substring(0, 72)}…' : body;
-  }
-  if (p.photoUrls.isNotEmpty) return 'Photo post';
-  if (p.videoUrls.isNotEmpty) return 'Video post';
-  return 'Neighborhood update';
-}
-
-class _AreaNewsletterPreviewTile extends StatelessWidget {
-  const _AreaNewsletterPreviewTile({required this.post});
-
-  final NeighborhoodNewsPost post;
+class _HomeFeedItem extends StatelessWidget {
+  const _HomeFeedItem({required this.item});
+  final FeedItem item;
 
   @override
   Widget build(BuildContext context) {
-    final df = DateFormat.MMMd().add_jm();
-    final cat = post.newsCategory;
-    final thumb = post.photoUrls.isNotEmpty ? post.photoUrls.first.trim() : '';
-
-    return Material(
-      color: PawPartyColors.surface,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => context.push(
-          '/neighborhood-news/post/${post.id}',
-          extra: post,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: thumb.isNotEmpty
-                    ? PawFileOrNetworkImage(
-                        path: thumb,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: PawPartyColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(cat.icon, color: PawPartyColors.primary, size: 22),
-                      ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _areaNewsletterPreviewLine(post),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${post.authorDisplayName} · ${df.format(post.createdAt)} · ${cat.label}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
-                    ),
-                  ],
+    return AspectRatio(
+      aspectRatio: 9 / 16,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (item.isVideo)
+            _InlineVideoPlayer(url: item.mediaUrl)
+          else
+            CachedNetworkImage(
+              imageUrl: item.mediaUrl,
+              fit: BoxFit.cover,
+              placeholder: (_, _) => const ColoredBox(color: Color(0xFF1A1A1A)),
+              errorWidget: (_, _, _) => const ColoredBox(color: Color(0xFF1A1A1A)),
+            ),
+          // bottom gradient
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              height: 160,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Color(0xCC000000)],
                 ),
               ),
-              Icon(Icons.chevron_right, size: 18, color: PawPartyColors.textHint),
-            ],
+            ),
+          ),
+          // "Popular in" pill
+          if (item.isFromOtherArea)
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Text(
+                  'Popular in ${item.areaLabel}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ),
+            ),
+          // author + caption at bottom
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.displayName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (item.caption != null && item.caption!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    item.caption!,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineVideoPlayer extends StatefulWidget {
+  const _InlineVideoPlayer({required this.url});
+  final String url;
+
+  @override
+  State<_InlineVideoPlayer> createState() => _InlineVideoPlayerState();
+}
+
+class _InlineVideoPlayerState extends State<_InlineVideoPlayer> {
+  VideoPlayerController? _vc;
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final vc = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+    _vc = vc;
+    await vc.initialize();
+    vc.setLooping(true);
+    vc.setVolume(0);
+    if (mounted) {
+      setState(() => _ready = true);
+      vc.play();
+    }
+  }
+
+  @override
+  void dispose() {
+    _vc?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready || _vc == null) {
+      return const ColoredBox(color: Color(0xFF1A1A1A));
+    }
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _vc!.value.isPlaying ? _vc!.pause() : _vc!.play();
+        });
+      },
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _vc!.value.size.width,
+            height: _vc!.value.size.height,
+            child: VideoPlayer(_vc!),
           ),
         ),
       ),

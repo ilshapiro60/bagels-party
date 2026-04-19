@@ -52,7 +52,7 @@
         <!-- Replace with your Maps SDK key from Google Cloud Console -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAM1UU--2UnU54RYomva7USI3zdNVp5gGk"/>
+            android:value="AIzaSyCzvRYDxLjoc2-cJAHOuClIXMQSyoRcRac"/>
         <!-- AdMob App ID (test ID — replace with real ID before production) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

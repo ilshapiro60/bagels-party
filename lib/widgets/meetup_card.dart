@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../config/theme.dart';
 import '../models/meetup.dart';
-import 'paw_party_pizza_icon.dart';
 
 class MeetupCard extends StatelessWidget {
   final Meetup meetup;
@@ -15,6 +14,7 @@ class MeetupCard extends StatelessWidget {
   final VoidCallback? onHostManageGuests;
   /// Opens party details / guest list when the user taps outside inline actions.
   final VoidCallback? onTap;
+  final VoidCallback? onTitleTap;
 
   const MeetupCard({
     super.key,
@@ -25,6 +25,7 @@ class MeetupCard extends StatelessWidget {
     this.onHostInviteMore,
     this.onHostManageGuests,
     this.onTap,
+    this.onTitleTap,
   });
 
   @override
@@ -54,37 +55,10 @@ class MeetupCard extends StatelessWidget {
 
     final column = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              if (isHosting)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: PawPartyColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'HOSTING',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: PawPartyColors.primary,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              if (isHosting && hostCanInviteOrDelete && onHostDelete != null) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  onPressed: () => onHostDelete!(meetup),
-                  icon: Icon(Icons.delete_outline, size: 20, color: PawPartyColors.error),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  tooltip: 'Delete party',
-                ),
-              ],
-              const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -100,21 +74,31 @@ class MeetupCard extends StatelessWidget {
                   ),
                 ),
               ),
+              const Spacer(),
+              if (isHosting && hostCanInviteOrDelete && onHostDelete != null)
+                IconButton(
+                  onPressed: () => onHostDelete!(meetup),
+                  icon: Icon(Icons.delete_outline, size: 20, color: PawPartyColors.error),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  tooltip: 'Delete party',
+                ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            meetup.title,
-            style: Theme.of(context).textTheme.titleMedium,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 6),
+          GestureDetector(
+            onTap: onTitleTap,
+            child: Text(
+              meetup.title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                decoration: onTitleTap != null ? TextDecoration.underline : null,
+                decorationColor: PawPartyColors.primary.withValues(alpha: 0.4),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Hosted by ${meetup.hostName}',
-            style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
-          ),
-          const Spacer(),
+          const SizedBox(height: 8),
           Row(
             children: [
               Icon(Icons.calendar_today, size: 14, color: PawPartyColors.textSecondary),
@@ -125,9 +109,8 @@ class MeetupCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(Icons.people, size: 14, color: PawPartyColors.textSecondary),
               const SizedBox(width: 4),
@@ -138,33 +121,10 @@ class MeetupCard extends StatelessWidget {
                           ? '${meetup.acceptedCount}/${meetup.maxGuests} families'
                           : '${meetup.acceptedCount} accepted'),
                   style: TextStyle(fontSize: 12, color: PawPartyColors.textSecondary),
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (meetup.pizzaCommitment.foodSummaryForCard.isNotEmpty) ...[
-                if (meetup.pizzaCommitment.willProvidePizza) ...[
-                  const PawPartyPizzaIcon(size: 16),
-                  const SizedBox(width: 2),
-                ] else if (meetup.pizzaCommitment.willIncludePotluck) ...[
-                  Icon(Icons.restaurant_menu,
-                      size: 16, color: PawPartyColors.pizzaGold),
-                  const SizedBox(width: 2),
-                ],
-                Flexible(
-                  child: Text(
-                    meetup.pizzaCommitment.foodSummaryForCard,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: PawPartyColors.pizzaGold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.end,
-                  ),
-                ),
-              ],
             ],
           ),
           if (isHosting &&
