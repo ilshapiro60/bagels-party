@@ -44,7 +44,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyB-JqkNxN7ACYkDiU6rDs79OYO4nh0YpXU',
+    apiKey: 'AIzaSyAM1UU--2UnU54RYomva7USI3zdNVp5gGk',
     appId: '1:1073924094679:android:5ab2b340e05d85541ece92',
     messagingSenderId: '1073924094679',
     projectId: 'pawparty-app',
@@ -57,6 +57,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1073924094679',
     projectId: 'pawparty-app',
     storageBucket: 'pawparty-app.firebasestorage.app',
+    androidClientId: '1073924094679-mqs2gso1op9bugjcv7cehtuh5frp12bd.apps.googleusercontent.com',
+    iosClientId: '1073924094679-otc4k6jhnoj13a5eqra5t8b6so9uhd1f.apps.googleusercontent.com',
     iosBundleId: 'com.pawparty.pawParty',
   );
 

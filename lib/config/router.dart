@@ -42,7 +42,7 @@ final appRouter = GoRouter(
   initialLocation: '/login',
   refreshListenable: authRouterRefresh,
   redirect: (BuildContext context, GoRouterState state) {
-    final container = ProviderScope.containerOf(context);
+    final container = ProviderScope.containerOf(context, listen: false);
     final auth = container.read(authStateProvider);
     final loc = state.matchedLocation;
 

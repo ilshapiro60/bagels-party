@@ -7,7 +7,7 @@
       "type": "dart",
       "program": "lib/main.dart",
       "toolArgs": [
-        "--dart-define=GOOGLE_PLACES_API_KEY=AIzaSyAY3zfWMNvdCL6MygoKOC-KbnVt-KAwHKM"
+        "--dart-define=GOOGLE_PLACES_API_KEY=AIzaSyC5t_XrdP008QMLBpaevCDUULkNzwzkG3s"
       ]
     },
     {

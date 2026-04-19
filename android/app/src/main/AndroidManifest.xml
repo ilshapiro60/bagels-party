@@ -44,10 +44,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Google Maps uses Android platform views; Impeller can show blank/grey tiles.
+             Use Skia on Android until resolved upstream (mirrors the iOS FLTEnableImpeller fix). -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
         <!-- Replace with your Maps SDK key from Google Cloud Console -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAY3zfWMNvdCL6MygoKOC-KbnVt-KAwHKM"/>
+            android:value="AIzaSyAM1UU--2UnU54RYomva7USI3zdNVp5gGk"/>
         <!-- AdMob App ID (test ID — replace with real ID before production) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

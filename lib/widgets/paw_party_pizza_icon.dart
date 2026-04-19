@@ -55,10 +55,9 @@ class _PizzaSlicePainter extends CustomPainter {
     final pepR = m * 0.075;
     final pep = Paint()..color = _pepperoni;
     final pepperoniCenters = <Offset>[
-      Offset(w * 0.38, h * 0.38),
-      Offset(w * 0.58, h * 0.42),
-      Offset(w * 0.48, h * 0.58),
-      if (m >= 20) Offset(w * 0.62, h * 0.62),
+      Offset(w * 0.28, h * 0.34),
+      Offset(w * 0.63, h * 0.34),
+      Offset(w * 0.46, h * 0.57),
     ];
     canvas.save();
     canvas.clipPath(slice);

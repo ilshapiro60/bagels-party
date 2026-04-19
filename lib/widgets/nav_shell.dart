@@ -107,7 +107,7 @@ class NavShell extends StatelessWidget {
                 height: _hostCircleDiameter,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: PawPartyColors.surface,
+                  color: PawPartyColors.warmOak,
                   border: Border.all(
                     color: PawPartyColors.primary.withValues(alpha: 0.2),
                     width: 1.25,
@@ -126,7 +126,7 @@ class NavShell extends StatelessWidget {
                   ],
                 ),
                 alignment: Alignment.center,
-                child: PawPartyPizzaIcon(size: 34),
+                child: PawPartyPizzaIcon(size: 42),
               ),
             ),
             const SizedBox(height: 1),
