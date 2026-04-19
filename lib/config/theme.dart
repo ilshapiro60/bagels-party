@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+const _fontFamily = 'PlusJakartaSans';
 
 TextStyle _tiktokSans({
   double fontSize = 14,
   FontWeight fontWeight = FontWeight.w400,
   Color? color,
 }) {
-  return GoogleFonts.getFont(
-    'TikTok Sans',
+  return TextStyle(
+    fontFamily: _fontFamily,
     fontSize: fontSize,
     fontWeight: fontWeight,
     color: color,
@@ -15,7 +16,23 @@ TextStyle _tiktokSans({
 }
 
 TextTheme _tiktokSansTextTheme() {
-  return GoogleFonts.getTextTheme('TikTok Sans');
+  return const TextTheme(
+    displayLarge:  TextStyle(fontFamily: _fontFamily),
+    displayMedium: TextStyle(fontFamily: _fontFamily),
+    displaySmall:  TextStyle(fontFamily: _fontFamily),
+    headlineLarge: TextStyle(fontFamily: _fontFamily),
+    headlineMedium:TextStyle(fontFamily: _fontFamily),
+    headlineSmall: TextStyle(fontFamily: _fontFamily),
+    titleLarge:    TextStyle(fontFamily: _fontFamily),
+    titleMedium:   TextStyle(fontFamily: _fontFamily),
+    titleSmall:    TextStyle(fontFamily: _fontFamily),
+    bodyLarge:     TextStyle(fontFamily: _fontFamily),
+    bodyMedium:    TextStyle(fontFamily: _fontFamily),
+    bodySmall:     TextStyle(fontFamily: _fontFamily),
+    labelLarge:    TextStyle(fontFamily: _fontFamily),
+    labelMedium:   TextStyle(fontFamily: _fontFamily),
+    labelSmall:    TextStyle(fontFamily: _fontFamily),
+  );
 }
 
 class PawPartyColors {
