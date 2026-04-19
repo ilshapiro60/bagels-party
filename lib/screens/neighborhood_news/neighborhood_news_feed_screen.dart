@@ -504,17 +504,9 @@ class _PostCard extends StatelessWidget {
                     const SizedBox(height: 4),
                   ],
                   if (post.body.trim().isNotEmpty)
-                    Text.rich(
-                      TextSpan(
-                        style: TextStyle(fontSize: 14, height: 1.35, color: PawPartyColors.textPrimary),
-                        children: [
-                          TextSpan(
-                            text: '${post.authorDisplayName} ',
-                            style: TextStyle(fontWeight: FontWeight.w700, color: PawPartyColors.textPrimary),
-                          ),
-                          TextSpan(text: post.body),
-                        ],
-                      ),
+                    Text(
+                      post.body,
+                      style: TextStyle(fontSize: 14, height: 1.35, color: PawPartyColors.textPrimary),
                       maxLines: 8,
                       overflow: TextOverflow.ellipsis,
                     ),

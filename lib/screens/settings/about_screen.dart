@@ -7,7 +7,7 @@ import '../../config/theme.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _version = '1.5.0';
+  static const _version = '1.5.1';
 
   @override
   Widget build(BuildContext context) {

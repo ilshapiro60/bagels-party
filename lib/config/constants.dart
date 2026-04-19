@@ -3,7 +3,7 @@ class AppConstants {
   static const String appTagline = 'Where Paws Meet Pizza';
   static const String supportEmail = 'il_shapiro@hotmail.com';
   static const String privacyPolicyUrl = 'https://ilshapiro60.github.io/bagels-party/privacy';
-  static const String termsOfServiceUrl = 'https://zumitok.com/terms';
+  static const String termsOfServiceUrl = 'https://ilshapiro60.github.io/bagels-party/terms';
   static const double defaultRadius = 5.0; // miles
   static const int maxFreeHostings = 3;
 

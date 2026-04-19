@@ -638,7 +638,11 @@ class _InlineVideoPlayerState extends State<_InlineVideoPlayer> {
 
   @override
   void dispose() {
-    _vc?.dispose();
+    final vc = _vc;
+    _vc = null;
+    _ready = false;
+    vc?.pause();
+    vc?.dispose();
     super.dispose();
   }
 

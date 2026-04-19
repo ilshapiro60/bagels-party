@@ -835,34 +835,10 @@ Future<void> _showBioEditor(
   WidgetRef ref,
   UserProfile user,
 ) async {
-  final controller = TextEditingController(text: user.bio ?? '');
   final submitted = await showDialog<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Your bio'),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        maxLines: 4,
-        maxLength: 280,
-        decoration: const InputDecoration(
-          hintText: 'Dog dad, pizza enthusiast…',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, controller.text),
-          child: const Text('Save'),
-        ),
-      ],
-    ),
+    builder: (ctx) => _BioEditorDialog(initialValue: user.bio ?? ''),
   );
-  controller.dispose();
   if (!context.mounted || submitted == null) return;
   final trimmed = submitted.trim();
   ref.read(authStateProvider.notifier).updateUser(
@@ -878,13 +854,96 @@ Future<void> _showDisplayNameEditor(
   WidgetRef ref,
   UserProfile user,
 ) async {
-  final controller = TextEditingController(text: user.displayName);
   final submitted = await showDialog<String>(
     context: context,
-    builder: (ctx) => AlertDialog(
+    builder: (ctx) => _DisplayNameEditorDialog(initialValue: user.displayName),
+  );
+  if (!context.mounted || submitted == null) return;
+  final trimmed = submitted.trim();
+  if (trimmed.isEmpty) return;
+  await ref.read(authStateProvider.notifier).updateDisplayName(trimmed);
+}
+
+class _BioEditorDialog extends StatefulWidget {
+  const _BioEditorDialog({required this.initialValue});
+  final String initialValue;
+
+  @override
+  State<_BioEditorDialog> createState() => _BioEditorDialogState();
+}
+
+class _BioEditorDialogState extends State<_BioEditorDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Your bio'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLines: 4,
+        maxLength: 280,
+        decoration: const InputDecoration(
+          hintText: 'Dog dad, pizza enthusiast…',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DisplayNameEditorDialog extends StatefulWidget {
+  const _DisplayNameEditorDialog({required this.initialValue});
+  final String initialValue;
+
+  @override
+  State<_DisplayNameEditorDialog> createState() => _DisplayNameEditorDialogState();
+}
+
+class _DisplayNameEditorDialogState extends State<_DisplayNameEditorDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
       title: const Text('Display name'),
       content: TextField(
-        controller: controller,
+        controller: _controller,
         autofocus: true,
         textCapitalization: TextCapitalization.words,
         decoration: const InputDecoration(
@@ -894,21 +953,16 @@ Future<void> _showDisplayNameEditor(
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(ctx),
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(ctx, controller.text),
+          onPressed: () => Navigator.pop(context, _controller.text),
           child: const Text('Save'),
         ),
       ],
-    ),
-  );
-  controller.dispose();
-  if (!context.mounted || submitted == null) return;
-  final trimmed = submitted.trim();
-  if (trimmed.isEmpty) return;
-  await ref.read(authStateProvider.notifier).updateDisplayName(trimmed);
+    );
+  }
 }
 
 const _businessCategories = [
