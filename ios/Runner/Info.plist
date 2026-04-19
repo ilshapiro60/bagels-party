@@ -87,9 +87,9 @@
 	<string>ZumiTok needs photo library access to choose pet and party pictures and videos.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ZumiTok needs microphone access when you record party videos.</string>
-	<!-- Dedicated iOS Maps key (GCP: Maps SDK for iOS + bundle com.pawparty.pawParty). Firebase still uses GoogleService-Info.plist API_KEY. -->
+	<!-- Shared Maps/Places key (GCP: Maps SDK for Android + iOS, unrestricted). Firebase still uses GoogleService-Info.plist API_KEY. -->
 	<key>GMSApiKey</key>
-	<string>AIzaSyDwGDELiPyaq2VjCD8bBnZa_RolPzcEKLM</string>
+	<string>AIzaSyAM1UU--2UnU54RYomva7USI3zdNVp5gGk</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>ZumiTok uses your general area to show pets and meetups near you. Exact addresses are never shared on the map.</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
