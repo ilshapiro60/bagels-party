@@ -16,8 +16,7 @@ service cloud.firestore {
         ||
         // Allow removing self from another user's friendUids (mutual unfriend / block)
         (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendUids'])
-          && resource.data.get('friendUids', []).hasAll([request.auth.uid])
+          resource.data.get('friendUids', []).hasAll([request.auth.uid])
           && !request.resource.data.get('friendUids', []).hasAll([request.auth.uid])
         )
       );
@@ -40,8 +39,9 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.ownerIds is list
         && request.auth.uid in request.resource.data.ownerIds;
+      // resource == null means the doc doesn't exist; batch deletes on non-existent docs are no-ops.
       allow delete: if request.auth != null
-        && request.auth.uid in resource.data.ownerIds;
+        && (resource == null || request.auth.uid in resource.data.ownerIds);
     }
 
     // Mutual block: neither owner can send pet buddy requests until unmuted.
