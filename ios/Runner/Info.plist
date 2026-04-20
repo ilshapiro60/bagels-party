@@ -90,6 +90,8 @@
 	<!-- Shared Maps/Places key (GCP: Maps SDK for Android + iOS, unrestricted). Firebase still uses GoogleService-Info.plist API_KEY. -->
 	<key>GMSApiKey</key>
 	<string>AIzaSyCzvRYDxLjoc2-cJAHOuClIXMQSyoRcRac</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>ZumiTok uses advertising to keep the app free. Allowing tracking helps show you more relevant ads.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>ZumiTok uses your general area to show pets and meetups near you. Exact addresses are never shared on the map.</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
