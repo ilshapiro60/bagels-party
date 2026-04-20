@@ -19,6 +19,12 @@ service cloud.firestore {
           resource.data.get('friendUids', []).hasAll([request.auth.uid])
           && !request.resource.data.get('friendUids', []).hasAll([request.auth.uid])
         )
+        ||
+        // Allow adding self to another user's friendUids (pet buddy accepted)
+        (
+          !resource.data.get('friendUids', []).hasAll([request.auth.uid])
+          && request.resource.data.get('friendUids', []).hasAll([request.auth.uid])
+        )
       );
 
       match /pets/{petId} {
@@ -291,11 +297,6 @@ service cloud.firestore {
         return conversationExists()
           ? get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
           : [];
-      }
-
-      function conversationDmOtherUid() {
-        let p = conversationParticipantUids();
-        return p[0] == request.auth.uid ? p[1] : p[0];
       }
 
       // Mute rule only applies to 1:1 threads; group messages are not blocked by pair mutes.

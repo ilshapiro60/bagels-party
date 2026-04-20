@@ -199,6 +199,7 @@ class FirestorePetBuddyRepository {
     final buddyDocId = '${sorted[0]}_${sorted[1]}';
 
     final toProfile = _db.collection('profiles').doc(toOwnerId);
+    final fromProfile = _db.collection('profiles').doc(fromOwnerId);
     final batch = _db.batch();
     batch.update(reqRef, {
       'status': 'accepted',
@@ -211,9 +212,12 @@ class FirestorePetBuddyRepository {
     });
     batch.set(
       toProfile,
-      {
-        'friendUids': FieldValue.arrayUnion([fromOwnerId]),
-      },
+      {'friendUids': FieldValue.arrayUnion([fromOwnerId])},
+      SetOptions(merge: true),
+    );
+    batch.set(
+      fromProfile,
+      {'friendUids': FieldValue.arrayUnion([toOwnerId])},
       SetOptions(merge: true),
     );
     await batch.commit();
