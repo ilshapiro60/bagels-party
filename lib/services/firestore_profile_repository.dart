@@ -189,18 +189,19 @@ class FirestoreProfileRepository {
     required String uid,
     required String friendUid,
   }) async {
-    final batch = _db.batch();
-    batch.set(
-      _profiles.doc(uid),
-      {'friendUids': FieldValue.arrayRemove([friendUid])},
-      SetOptions(merge: true),
-    );
-    batch.set(
-      _profiles.doc(friendUid),
-      {'friendUids': FieldValue.arrayRemove([uid])},
-      SetOptions(merge: true),
-    );
-    await batch.commit();
+    // Own profile: always allowed.
+    await _profiles.doc(uid).update({
+      'friendUids': FieldValue.arrayRemove([friendUid]),
+    });
+    // Other user's profile: only succeeds when they had us in their list.
+    // Silently ignore permission errors — they may not be mutual friends.
+    try {
+      await _profiles.doc(friendUid).update({
+        'friendUids': FieldValue.arrayRemove([uid]),
+      });
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') rethrow;
+    }
   }
 
   static Future<void> blockUser({
