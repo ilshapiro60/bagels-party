@@ -377,22 +377,8 @@ service cloud.firestore {
         && request.resource.data.status in ['dismissed', 'action_taken'];
     }
 
-    // Private DM / user conduct reports (reporter must be in the conversation).
+    // Safety reports: chat, profile, or post context.
     match /chatSafetyReports/{reportId} {
-      function chatSafetyReportConversation() {
-        return get(/databases/$(database)/documents/conversations/$(request.resource.data.conversationId));
-      }
-
-      function chatSafetyReportConversationValid() {
-        let c = chatSafetyReportConversation();
-        return c.exists
-          && c.data.participants is list
-          && c.data.participants.size() >= 2
-          && request.auth.uid in c.data.participants
-          && request.resource.data.reportedUid in c.data.participants
-          && request.resource.data.reportedUid != request.auth.uid;
-      }
-
       allow create: if request.auth != null
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.status == 'pending'
@@ -400,15 +386,7 @@ service cloud.firestore {
         && request.resource.data.reportedUid != request.auth.uid
         && request.resource.data.reason is string
         && request.resource.data.reason.size() > 0
-        && request.resource.data.reason.size() <= 500
-        && (
-          // Chat report: reporter must be a participant in the conversation
-          (request.resource.data.conversationId != '' && chatSafetyReportConversationValid())
-          ||
-          // Profile or post report: no conversation needed
-          (request.resource.data.conversationId == ''
-           && request.resource.data.get('reportContext', '') in ['profile', 'post'])
-        );
+        && request.resource.data.reason.size() <= 500;
 
       allow read: if request.auth != null
         && (isContentModerator() || resource.data.reporterId == request.auth.uid);
