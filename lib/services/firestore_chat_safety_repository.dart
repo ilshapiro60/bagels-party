@@ -41,6 +41,28 @@ class FirestoreChatSafetyRepository {
         .map((s) => s.docs.map(ChatSafetyReport.fromDoc).toList());
   }
 
+  /// Report a user from outside a chat (profile or post context).
+  static Future<void> submitProfileReport({
+    required String reporterId,
+    required String reportedUid,
+    required String reason,
+    String reportContext = 'profile', // 'profile' | 'post'
+    String? contextId,
+  }) async {
+    final r = reason.trim();
+    if (r.isEmpty) throw StateError('Please describe the issue.');
+    await _db.collection(_reports).add({
+      'conversationId': '',
+      'reportedUid': reportedUid,
+      'reporterId': reporterId,
+      'reason': r,
+      'reportContext': reportContext,
+      'contextId': ?contextId,
+      'status': ChatSafetyReport.statusPending,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   static Future<void> resolveReport({
     required String reportId,
     required bool acknowledge,

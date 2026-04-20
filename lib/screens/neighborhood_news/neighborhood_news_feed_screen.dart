@@ -11,6 +11,7 @@ import '../../services/firestore_neighborhood_news_repository.dart';
 import '../../widgets/newsletter_ad_widget.dart';
 import '../../widgets/paw_file_image.dart';
 import '../../widgets/reaction_bar.dart';
+import '../../widgets/report_dialog.dart';
 
 class NeighborhoodNewsFeedScreen extends ConsumerStatefulWidget {
   const NeighborhoodNewsFeedScreen({super.key});
@@ -121,6 +122,15 @@ class _NeighborhoodNewsFeedScreenState
                                 dateFormat: df,
                                 isOwner: user.id == p.authorId,
                                 onDelete: () => _confirmDeletePost(p),
+                                onReport: user.id == p.authorId
+                                    ? null
+                                    : () => showReportDialog(
+                                          context,
+                                          ref,
+                                          reportedUid: p.authorId,
+                                          reportContext: 'post',
+                                          contextId: p.id,
+                                        ),
                               );
                             },
                           );
@@ -419,12 +429,14 @@ class _PostCard extends StatelessWidget {
     required this.dateFormat,
     this.isOwner = false,
     this.onDelete,
+    this.onReport,
   });
 
   final NeighborhoodNewsPost post;
   final DateFormat dateFormat;
   final bool isOwner;
   final VoidCallback? onDelete;
+  final VoidCallback? onReport;
 
   void _openPostDetail(BuildContext context) {
     context.push(
@@ -460,14 +472,22 @@ class _PostCard extends StatelessWidget {
                 dateFormat.format(post.createdAt),
                 style: TextStyle(fontSize: 10, color: PawPartyColors.textHint),
               ),
-              if (isOwner && onDelete != null)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
+              if (isOwner && onDelete != null || onReport != null)
+                PopupMenuButton<String>(
+                  iconSize: 18,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  icon: Icon(Icons.delete_outline, size: 18, color: PawPartyColors.textHint),
-                  onPressed: onDelete,
-                  tooltip: 'Delete post',
+                  icon: Icon(Icons.more_vert, size: 18, color: PawPartyColors.textHint),
+                  onSelected: (v) {
+                    if (v == 'delete') onDelete?.call();
+                    if (v == 'report') onReport?.call();
+                  },
+                  itemBuilder: (ctx) => [
+                    if (isOwner && onDelete != null)
+                      const PopupMenuItem(value: 'delete', child: Text('Delete post')),
+                    if (onReport != null)
+                      const PopupMenuItem(value: 'report', child: Text('Report…')),
+                  ],
                 ),
             ],
           ),

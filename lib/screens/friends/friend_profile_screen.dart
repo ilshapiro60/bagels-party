@@ -12,6 +12,7 @@ import '../../services/firestore_profile_repository.dart';
 import '../../services/profile_persistence.dart';
 import '../../widgets/paw_file_image.dart';
 import '../../widgets/paw_fullscreen_photo_viewer.dart';
+import '../../widgets/report_dialog.dart';
 
 class FriendProfileScreen extends ConsumerStatefulWidget {
   const FriendProfileScreen({super.key, required this.friendUid});
@@ -146,11 +147,15 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
             onSelected: (v) {
               if (v == 'remove') _removeFriend();
               if (v == 'block') _blockUser();
+              if (v == 'report') {
+                showReportDialog(context, ref, reportedUid: widget.friendUid);
+              }
             },
             itemBuilder: (ctx) => [
               if (isFriend)
                 const PopupMenuItem(value: 'remove', child: Text('Remove connection')),
               const PopupMenuItem(value: 'block', child: Text('Block')),
+              const PopupMenuItem(value: 'report', child: Text('Report…')),
             ],
           ),
         ],
