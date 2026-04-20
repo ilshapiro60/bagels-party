@@ -9,8 +9,18 @@ service cloud.firestore {
 
     match /profiles/{userId} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow create, delete: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && (
+        // Full update of own profile
+        request.auth.uid == userId
+        ||
+        // Allow removing self from another user's friendUids (mutual unfriend / block)
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendUids'])
+          && resource.data.get('friendUids', []).hasAll([request.auth.uid])
+          && !request.resource.data.get('friendUids', []).hasAll([request.auth.uid])
+        )
+      );
 
       match /pets/{petId} {
         allow create, update, delete: if request.auth != null && request.auth.uid == userId;
@@ -291,11 +301,8 @@ service cloud.firestore {
       // Mute rule only applies to 1:1 threads; group messages are not blocked by pair mutes.
       function messageSendMuteAllowed() {
         let p = conversationParticipantUids();
-        if (p.size() != 2) {
-          return true;
-        }
         let other = p[0] == request.auth.uid ? p[1] : p[0];
-        return !exists(petBuddyOwnerMutePairPath(request.auth.uid, other));
+        return p.size() != 2 || !exists(petBuddyOwnerMutePairPath(request.auth.uid, other));
       }
 
       function messageMediaUrls() {
@@ -387,15 +394,21 @@ service cloud.firestore {
       }
 
       allow create: if request.auth != null
-        && chatSafetyReportConversationValid()
         && request.resource.data.reporterId == request.auth.uid
         && request.resource.data.status == 'pending'
-        && request.resource.data.conversationId is string
         && request.resource.data.reportedUid is string
+        && request.resource.data.reportedUid != request.auth.uid
         && request.resource.data.reason is string
         && request.resource.data.reason.size() > 0
         && request.resource.data.reason.size() <= 500
-        && request.resource.data.get('contextSnippet', '').size() <= 200;
+        && (
+          // Chat report: reporter must be a participant in the conversation
+          (request.resource.data.conversationId != '' && chatSafetyReportConversationValid())
+          ||
+          // Profile or post report: no conversation needed
+          (request.resource.data.conversationId == ''
+           && request.resource.data.get('reportContext', '') in ['profile', 'post'])
+        );
 
       allow read: if request.auth != null
         && (isContentModerator() || resource.data.reporterId == request.auth.uid);
