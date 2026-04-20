@@ -95,7 +95,10 @@ class NavShell extends StatelessWidget {
   Widget _hostNavItem(BuildContext context) {
     return Expanded(
       child: GestureDetector(
-        onTap: () => context.push('/host'),
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+          context.push('/host');
+        },
         behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -169,7 +172,10 @@ class NavShell extends StatelessWidget {
 
     return Expanded(
       child: GestureDetector(
-        onTap: () => isPush ? context.push(route) : context.go(route),
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
+          isPush ? context.push(route) : context.go(route);
+        },
         behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisSize: MainAxisSize.min,
