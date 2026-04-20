@@ -5,7 +5,7 @@ class AppConstants {
   static const String privacyPolicyUrl = 'https://ilshapiro60.github.io/bagels-party/privacy';
   static const String termsOfServiceUrl = 'https://ilshapiro60.github.io/bagels-party/terms';
   static const double defaultRadius = 5.0; // miles
-  static const int maxFreeHostings = 3;
+  static const int maxFreeHostings = 999;
 
   // Per-party hosting fees
   static const double partyFeeRegular = 3.99;
