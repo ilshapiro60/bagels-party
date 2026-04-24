@@ -1,11 +1,15 @@
 import 'dart:async' show TimeoutException, unawaited;
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../config/auth_router_refresh.dart';
 import '../config/cloud_functions_region.dart';
@@ -302,7 +306,6 @@ class AuthStateNotifier extends Notifier<AuthState> {
     }
   }
 
-  /// Google uses Firebase + Google Sign-In. Apple is not implemented.
   Future<bool> signInWithSocial(String method) async {
     state = state.copyWith(isLoading: true);
     final key = method.toLowerCase();
@@ -315,13 +318,91 @@ class AuthStateNotifier extends Notifier<AuthState> {
       }
     }
     if (key == 'apple') {
-      state = state.copyWith(isLoading: false);
-      throw UnsupportedError(
-        'Apple Sign-In is not set up yet. Use Google or email.',
-      );
+      try {
+        return await _signInWithApple();
+      } catch (_) {
+        state = state.copyWith(isLoading: false);
+        rethrow;
+      }
     }
     state = state.copyWith(isLoading: false);
     throw UnsupportedError('Unknown sign-in method: $method');
+  }
+
+  static String _generateNonce([int length = 32]) {
+    const charset =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => charset[random.nextInt(charset.length)])
+        .join();
+  }
+
+  static String _sha256ofString(String input) {
+    final bytes = utf8.encode(input);
+    return sha256.convert(bytes).toString();
+  }
+
+  Future<bool> _signInWithApple() async {
+    if (!DefaultFirebaseOptions.isConfigured || !isFirebaseInitialized) {
+      state = state.copyWith(isLoading: false);
+      throw StateError('Firebase is not configured. Run `flutterfire configure`.');
+    }
+
+    final rawNonce = _generateNonce();
+    final nonce = _sha256ofString(rawNonce);
+
+    late final AuthorizationCredentialAppleID appleCredential;
+    try {
+      appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: nonce,
+      );
+    } on SignInWithAppleAuthorizationException catch (e) {
+      state = state.copyWith(isLoading: false);
+      if (e.code == AuthorizationErrorCode.canceled) return false;
+      rethrow;
+    }
+
+    final idToken = appleCredential.identityToken;
+    if (idToken == null || idToken.isEmpty) {
+      state = state.copyWith(isLoading: false);
+      throw StateError('Apple Sign-In did not return an identity token.');
+    }
+
+    final oauthCredential = OAuthProvider('apple.com').credential(
+      idToken: idToken,
+      rawNonce: rawNonce,
+    );
+
+    try {
+      final prior = FirebaseAuth.instance.currentUser;
+      if (prior != null && prior.isAnonymous) {
+        await FirebaseAuth.instance.signOut();
+      }
+      await FirebaseAuth.instance.signInWithCredential(oauthCredential);
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
+
+    // Apple only sends name on the first sign-in — persist before profile fetch.
+    final fbUser = FirebaseAuth.instance.currentUser!;
+    final given = appleCredential.givenName;
+    final family = appleCredential.familyName;
+    if ((given != null || family != null) &&
+        (fbUser.displayName == null || fbUser.displayName!.isEmpty)) {
+      final fullName = '${given ?? ''} ${family ?? ''}'.trim();
+      if (fullName.isNotEmpty) {
+        await fbUser.updateDisplayName(fullName);
+        await fbUser.reload();
+      }
+    }
+
+    await _applyAuthenticatedUser(FirebaseAuth.instance.currentUser!);
+    return true;
   }
 
   Future<bool> _signInWithGoogle() async {
