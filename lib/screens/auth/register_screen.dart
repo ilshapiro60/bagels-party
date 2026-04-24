@@ -21,6 +21,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _confirmController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
+  bool _eulaAccepted = false;
 
   @override
   void dispose() {
@@ -211,12 +212,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           return null;
                         },
                       ).animate().fadeIn(delay: 500.ms, duration: 500.ms),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Checkbox(
+                            value: _eulaAccepted,
+                            onChanged: (v) =>
+                                setState(() => _eulaAccepted = v ?? false),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Text(
+                                'I agree to the Terms of Service and Community Guidelines. '
+                                'I understand that objectionable content and abusive behavior '
+                                'are not tolerated and may result in account removal.',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      height: 1.4,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ).animate().fadeIn(delay: 550.ms, duration: 500.ms),
+                      const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: authState.isLoading ? null : _handleSignUp,
+                          onPressed:
+                              authState.isLoading || !_eulaAccepted ? null : _handleSignUp,
                           child: authState.isLoading
                               ? const SizedBox(
                                   width: 24,

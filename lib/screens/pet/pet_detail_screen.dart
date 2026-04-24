@@ -13,6 +13,7 @@ import '../../providers/app_providers.dart';
 import '../../services/firebase_storage_service.dart';
 import '../../services/firestore_pet_buddy_repository.dart';
 import '../../services/firestore_pet_repository.dart';
+import '../../services/firestore_profile_repository.dart';
 import '../../services/vet_clinic_geocode.dart';
 import '../vet_clinic_map_picker_screen.dart';
 import '../../utils/media_picker_utils.dart';
@@ -86,6 +87,24 @@ class PetDetailScreen extends ConsumerWidget {
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(value: 'delete', child: Text('Delete pet')),
+              ],
+            )
+          else
+            PopupMenuButton<String>(
+              onSelected: (v) {
+                if (v == 'block') _confirmBlockOwner(context, ref, pet.ownerId, user);
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'block',
+                  child: Row(
+                    children: [
+                      Icon(Icons.block, size: 18),
+                      SizedBox(width: 10),
+                      Text('Block owner'),
+                    ],
+                  ),
+                ),
               ],
             ),
         ],
@@ -510,6 +529,73 @@ class _OwnerCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Future<void> _confirmBlockOwner(
+  BuildContext context,
+  WidgetRef ref,
+  String ownerUid,
+  UserProfile? myProfile,
+) async {
+  final myUid = myProfile?.id;
+  if (myUid == null || myUid == ownerUid) return;
+
+  final alreadyBlocked = myProfile?.blockedUids.contains(ownerUid) ?? false;
+  if (alreadyBlocked) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('This user is already blocked.')),
+    );
+    return;
+  }
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Block this person?'),
+      content: const Text(
+        'You will no longer see their pets in Discover and they will not be '
+        'able to message you. You can unblock them from your Friends screen.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: PawPartyColors.error),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Block'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  try {
+    await FirestoreProfileRepository.blockUser(
+      myUid: myUid,
+      targetUid: ownerUid,
+    );
+    await FirestorePetBuddyRepository.muteBuddyOwners(
+      actingUid: myUid,
+      otherOwnerId: ownerUid,
+    );
+    ref.invalidate(petBuddyOwnerMutesProvider);
+    for (final p in ref.read(userPetsProvider)) {
+      ref.invalidate(buddyPetsForPetProvider(p.id));
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('User blocked.')),
+      );
+      context.pop();
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not block: $e')),
+      );
+    }
   }
 }
 

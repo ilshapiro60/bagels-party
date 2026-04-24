@@ -178,7 +178,6 @@ class AuthStateNotifier extends Notifier<AuthState> {
       } catch (e, st) {
         debugPrint('Pet hydrate in offline fallback: $e\n$st');
       }
-      Future.microtask(() => syncDeviceLocation());
       unawaited(_retryFullProfileSync(u));
     } catch (e, st) {
       debugPrint('Offline session fallback failed: $e\n$st');
@@ -241,7 +240,6 @@ class AuthStateNotifier extends Notifier<AuthState> {
       authMethod: _authMethodLabel(u),
     );
     authRouterRefresh.notifyAuthChanged();
-    Future.microtask(() => syncDeviceLocation());
     unawaited(PushNotificationService.initialize(profile.id));
   }
 
