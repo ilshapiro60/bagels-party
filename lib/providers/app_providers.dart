@@ -359,6 +359,12 @@ class AuthStateNotifier extends Notifier<AuthState> {
           AppleIDAuthorizationScopes.fullName,
         ],
         nonce: nonce,
+        webAuthenticationOptions: WebAuthenticationOptions(
+          clientId: 'com.pawparty.pawParty.siwa',
+          redirectUri: Uri.parse(
+            'https://pawparty-app.firebaseapp.com/__/auth/handler',
+          ),
+        ),
       );
     } on SignInWithAppleAuthorizationException catch (e) {
       state = state.copyWith(isLoading: false);
