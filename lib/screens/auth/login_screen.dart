@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -364,6 +365,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildSocialButtons() {
+    final showApple = defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
     return Row(
       children: [
         Expanded(
@@ -373,14 +376,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             () => _handleSocial('google'),
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _socialButton(
-            Icons.apple,
-            'Apple',
-            () => _handleSocial('apple'),
+        if (showApple) ...[
+          const SizedBox(width: 8),
+          Expanded(
+            child: _socialButton(
+              Icons.apple,
+              'Apple',
+              () => _handleSocial('apple'),
+            ),
           ),
-        ),
+        ],
       ],
     ).animate().fadeIn(delay: 600.ms, duration: 500.ms);
   }
