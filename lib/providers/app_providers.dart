@@ -359,12 +359,17 @@ class AuthStateNotifier extends Notifier<AuthState> {
           AppleIDAuthorizationScopes.fullName,
         ],
         nonce: nonce,
-        webAuthenticationOptions: WebAuthenticationOptions(
-          clientId: 'com.pawparty.pawParty.siwa',
-          redirectUri: Uri.parse(
-            'https://pawparty-app.firebaseapp.com/__/auth/handler',
-          ),
-        ),
+        // webAuthenticationOptions only needed on Android; native iOS uses
+        // ASAuthorizationAppleIDProvider which ignores this parameter.
+        webAuthenticationOptions: defaultTargetPlatform == TargetPlatform.iOS ||
+                defaultTargetPlatform == TargetPlatform.macOS
+            ? null
+            : WebAuthenticationOptions(
+                clientId: 'com.pawparty.pawParty.siwa',
+                redirectUri: Uri.parse(
+                  'https://pawparty-app.firebaseapp.com/__/auth/handler',
+                ),
+              ),
       );
     } on SignInWithAppleAuthorizationException catch (e) {
       state = state.copyWith(isLoading: false);
