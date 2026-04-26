@@ -389,7 +389,8 @@ class AuthStateNotifier extends Notifier<AuthState> {
         await FirebaseAuth.instance.signOut();
       }
       await FirebaseAuth.instance.signInWithCredential(oauthCredential);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AppleSignIn] Firebase error: $e');
       state = state.copyWith(isLoading: false);
       rethrow;
     }
