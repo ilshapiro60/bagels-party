@@ -23,6 +23,7 @@ String _authUserMessage(Object e) {
   if (e is FirebaseAuthException) {
     switch (e.code) {
       case 'invalid-credential':
+        return 'Sign-in could not be completed. Please try again.';
       case 'wrong-password':
       case 'user-not-found':
         return 'That email or password is not correct. Try again or tap Forgot password.';
