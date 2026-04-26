@@ -386,6 +386,7 @@ class AuthStateNotifier extends Notifier<AuthState> {
     final oauthCredential = OAuthProvider('apple.com').credential(
       idToken: idToken,
       rawNonce: rawNonce,
+      accessToken: appleCredential.authorizationCode,
     );
 
     try {
