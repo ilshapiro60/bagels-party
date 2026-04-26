@@ -39,7 +39,7 @@ class HomeScreen extends ConsumerWidget {
         .where((i) => i.status == PartyInviteStatus.pending)
         .toList();
     final userName = authState.user?.displayName ?? 'Friend';
-    final areaLabel = authState.user?.neighborhood ?? 'Nearby';
+    final areaLabel = authState.user?.neighborhood ?? 'Set your area';
     final photoUrl = authState.user?.photoUrl;
     final feedItems = ref.watch(feedItemsProvider).value ?? [];
 
@@ -274,21 +274,27 @@ class HomeScreen extends ConsumerWidget {
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.location_on, size: 17, color: PawPartyColors.textSecondary),
-                  const SizedBox(width: 2),
-                  Flexible(
-                    child: Text(
-                      areaLabel,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 15),
+              GestureDetector(
+                onTap: () => context.go('/discover'),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.location_on, size: 17, color: PawPartyColors.primary),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        areaLabel,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontSize: 15,
+                              color: PawPartyColors.primary,
+                            ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
               Row(

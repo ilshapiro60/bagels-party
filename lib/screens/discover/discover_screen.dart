@@ -93,6 +93,15 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
         _overrideLng = loc.longitude;
         _overrideLabel = query.trim();
       });
+      final user = ref.read(authStateProvider).user;
+      if (user != null) {
+        final updated = user.copyWithCoordinates(
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          neighborhood: query.trim(),
+        );
+        ref.read(authStateProvider.notifier).updateUser(updated);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
