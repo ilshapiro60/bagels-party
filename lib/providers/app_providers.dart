@@ -228,8 +228,10 @@ class AuthStateNotifier extends Notifier<AuthState> {
       final refreshed = await FirestoreProfileRepository.fetchProfile(u.uid);
       if (refreshed != null) {
         p = await ProfilePersistence.mergeWithSaved(refreshed);
-        await FirestoreProfileRepository.saveProfile(p);
       }
+      // Reset check-in on every sign-in so location visibility is opt-in per session.
+      p = p.copyWithCheckedIn(false);
+      await FirestoreProfileRepository.saveProfile(p);
       await ref.read(userPetsProvider.notifier).hydrate(p.id);
       return p;
     });
@@ -300,6 +302,10 @@ class AuthStateNotifier extends Notifier<AuthState> {
       }
       final u = FirebaseAuth.instance.currentUser!;
       await _applyAuthenticatedUser(u);
+      // Email sign-up requires the EULA checkbox — mark accepted immediately.
+      if (state.user != null) {
+        updateUser(state.user!.copyWithTermsAccepted(true));
+      }
     } catch (e) {
       state = state.copyWith(isLoading: false);
       rethrow;
@@ -557,6 +563,20 @@ class AuthStateNotifier extends Notifier<AuthState> {
     }
   }
 
+  void acceptTerms() {
+    final user = state.user;
+    if (user == null) return;
+    updateUser(user.copyWithTermsAccepted(true));
+  }
+
+  /// Toggles the user's map check-in status. When [value] is true the user's
+  /// pets become visible to neighbours; false hides them. Resets on every sign-in.
+  void checkIn(bool value) {
+    final user = state.user;
+    if (user == null) return;
+    updateUser(user.copyWithCheckedIn(value));
+  }
+
   Future<void> updateDisplayName(String displayName) async {
     if (!state.isAuthenticated || state.user == null) return;
     final trimmed = displayName.trim();
@@ -710,10 +730,17 @@ final communityPetsStreamProvider = StreamProvider<List<Pet>>((ref) {
   );
 });
 
-/// Other users' pets (live). Empty until Firestore has data.
+/// Stream of user IDs who are currently checked in on the map.
+final checkedInUserIdsProvider = StreamProvider<Set<String>>((ref) {
+  if (!isFirebaseInitialized) return Stream.value({});
+  return FirestoreProfileRepository.watchCheckedInUserIds();
+});
+
+/// Other users' pets (live), filtered to only checked-in owners.
 final nearbyPetsProvider = Provider<List<Pet>>((ref) {
-  final async = ref.watch(communityPetsStreamProvider);
-  return async.value ?? [];
+  final pets = ref.watch(communityPetsStreamProvider).value ?? [];
+  final checkedIn = ref.watch(checkedInUserIdsProvider).value ?? {};
+  return pets.where((p) => checkedIn.contains(p.ownerId)).toList();
 });
 
 /// Deduped vet clinics from your pets plus neighbors' pets; sorted by link count, then distance.

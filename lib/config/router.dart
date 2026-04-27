@@ -10,6 +10,7 @@ import '../providers/app_providers.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/onboarding_screen.dart';
+import '../screens/auth/terms_screen.dart';
 import '../screens/feed/feed_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/discover/discover_screen.dart';
@@ -54,6 +55,7 @@ final appRouter = GoRouter(
 
     final isPublicAuth = loc == '/login' || loc == '/register';
     final isOnboarding = loc == '/onboarding';
+    final isTerms = loc == '/terms';
 
     if (!auth.isAuthenticated) {
       if (isPublicAuth || isOnboarding) return null;
@@ -63,6 +65,12 @@ final appRouter = GoRouter(
     if (auth.isAuthenticated && isPublicAuth) {
       return '/home';
     }
+
+    // Force terms acceptance for new users (social sign-in bypasses register screen).
+    if (auth.isAuthenticated && !(auth.user?.termsAccepted ?? false) && !isTerms) {
+      return '/terms';
+    }
+
     return null;
   },
   routes: [
@@ -77,6 +85,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/onboarding',
       builder: (context, state) => const OnboardingScreen(),
+    ),
+    GoRoute(
+      path: '/terms',
+      builder: (context, state) => const TermsScreen(),
     ),
     ShellRoute(
       navigatorKey: _shellNavigatorKey,

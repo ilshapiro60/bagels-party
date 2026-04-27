@@ -83,7 +83,17 @@ class FirestoreProfileRepository {
       guestRating: u.guestRating,
       createdAt: u.createdAt,
       bio: u.bio,
+      isCheckedIn: u.isCheckedIn,
+      termsAccepted: u.termsAccepted,
     );
+  }
+
+  /// Stream of user IDs who are currently checked in (visible on the map).
+  static Stream<Set<String>> watchCheckedInUserIds() {
+    return _profiles
+        .where('isCheckedIn', isEqualTo: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d.id).toSet());
   }
 
   static Future<void> saveProfile(UserProfile u) async {

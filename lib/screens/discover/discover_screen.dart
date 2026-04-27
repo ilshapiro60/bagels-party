@@ -425,6 +425,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
               _buildSearchBar(),
               _buildFilters(),
               _buildRadiusSlider(showViewerOnMap),
+              _buildCheckInBanner(),
               _buildMapPrivacyBanner(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -722,6 +723,52 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen>
           },
         );
       },
+    );
+  }
+
+  Widget _buildCheckInBanner() {
+    final isCheckedIn = ref.watch(authStateProvider).user?.isCheckedIn ?? false;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Row(
+        children: [
+          Icon(
+            isCheckedIn ? Icons.location_on : Icons.location_off_outlined,
+            size: 18,
+            color: isCheckedIn ? PawPartyColors.primary : PawPartyColors.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isCheckedIn
+                  ? 'You are checked in — neighbours can see your pets on the map.'
+                  : 'Check in to let nearby pet parents find you.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: isCheckedIn ? PawPartyColors.primary : PawPartyColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: () => ref.read(authStateProvider.notifier).checkIn(!isCheckedIn),
+            child: Text(
+              isCheckedIn ? 'Check Out' : 'Check In',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: isCheckedIn ? PawPartyColors.textSecondary : PawPartyColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

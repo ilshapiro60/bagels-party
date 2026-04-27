@@ -31,6 +31,13 @@ class UserProfile {
   final String? businessCategory;
   final String? businessPlaceId;
 
+  /// True while the user is actively checked in to appear on the nearby-pets map.
+  /// Reset to false on every sign-in so users must opt-in each session.
+  final bool isCheckedIn;
+
+  /// True once the user has explicitly accepted the Terms of Service / EULA.
+  final bool termsAccepted;
+
   UserProfile({
     required this.id,
     required this.email,
@@ -56,6 +63,8 @@ class UserProfile {
     this.businessName,
     this.businessCategory,
     this.businessPlaceId,
+    this.isCheckedIn = false,
+    this.termsAccepted = false,
   }) : neighborhoodKey = _effectiveNeighborhoodKey(neighborhoodKey, neighborhood);
 
   static String normalizeAreaKey(String? neighborhood) =>
@@ -117,6 +126,8 @@ class UserProfile {
       'businessName': businessName,
       'businessCategory': businessCategory,
       'businessPlaceId': businessPlaceId,
+      'isCheckedIn': isCheckedIn,
+      'termsAccepted': termsAccepted,
     };
   }
 
@@ -151,6 +162,8 @@ class UserProfile {
       businessName: map['businessName'] as String?,
       businessCategory: map['businessCategory'] as String?,
       businessPlaceId: map['businessPlaceId'] as String?,
+      isCheckedIn: map['isCheckedIn'] as bool? ?? false,
+      termsAccepted: map['termsAccepted'] as bool? ?? false,
     );
   }
 
@@ -185,6 +198,8 @@ class UserProfile {
       businessName: businessName,
       businessCategory: businessCategory,
       businessPlaceId: businessPlaceId,
+      isCheckedIn: isCheckedIn,
+      termsAccepted: termsAccepted,
     );
   }
 
@@ -214,6 +229,8 @@ class UserProfile {
       businessName: businessName,
       businessCategory: businessCategory,
       businessPlaceId: businessPlaceId,
+      isCheckedIn: isCheckedIn,
+      termsAccepted: termsAccepted,
     );
   }
 
@@ -257,6 +274,8 @@ class UserProfile {
       businessName: businessName,
       businessCategory: businessCategory,
       businessPlaceId: businessPlaceId,
+      isCheckedIn: isCheckedIn,
+      termsAccepted: termsAccepted,
     );
   }
 
@@ -291,6 +310,8 @@ class UserProfile {
       businessName: clearBusinessFields ? null : (businessName ?? this.businessName),
       businessCategory: clearBusinessFields ? null : (businessCategory ?? this.businessCategory),
       businessPlaceId: clearBusinessFields ? null : (businessPlaceId ?? this.businessPlaceId),
+      isCheckedIn: isCheckedIn,
+      termsAccepted: termsAccepted,
     );
   }
 
@@ -320,6 +341,70 @@ class UserProfile {
       businessName: businessName,
       businessCategory: businessCategory,
       businessPlaceId: businessPlaceId,
+      isCheckedIn: isCheckedIn,
+      termsAccepted: termsAccepted,
+    );
+  }
+
+  UserProfile copyWithCheckedIn(bool isCheckedIn) {
+    return UserProfile(
+      id: id,
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      ownerGalleryImagePaths: ownerGalleryImagePaths,
+      ownerGalleryVideoPaths: ownerGalleryVideoPaths,
+      neighborhood: neighborhood,
+      neighborhoodKey: neighborhoodKey,
+      isModerator: isModerator,
+      latitude: latitude,
+      longitude: longitude,
+      petIds: petIds,
+      friendUids: friendUids,
+      blockedUids: blockedUids,
+      hostCount: hostCount,
+      attendCount: attendCount,
+      hostRating: hostRating,
+      guestRating: guestRating,
+      createdAt: createdAt,
+      bio: bio,
+      isBusinessAccount: isBusinessAccount,
+      businessName: businessName,
+      businessCategory: businessCategory,
+      businessPlaceId: businessPlaceId,
+      isCheckedIn: isCheckedIn,
+      termsAccepted: termsAccepted,
+    );
+  }
+
+  UserProfile copyWithTermsAccepted(bool termsAccepted) {
+    return UserProfile(
+      id: id,
+      email: email,
+      displayName: displayName,
+      photoUrl: photoUrl,
+      ownerGalleryImagePaths: ownerGalleryImagePaths,
+      ownerGalleryVideoPaths: ownerGalleryVideoPaths,
+      neighborhood: neighborhood,
+      neighborhoodKey: neighborhoodKey,
+      isModerator: isModerator,
+      latitude: latitude,
+      longitude: longitude,
+      petIds: petIds,
+      friendUids: friendUids,
+      blockedUids: blockedUids,
+      hostCount: hostCount,
+      attendCount: attendCount,
+      hostRating: hostRating,
+      guestRating: guestRating,
+      createdAt: createdAt,
+      bio: bio,
+      isBusinessAccount: isBusinessAccount,
+      businessName: businessName,
+      businessCategory: businessCategory,
+      businessPlaceId: businessPlaceId,
+      isCheckedIn: isCheckedIn,
+      termsAccepted: termsAccepted,
     );
   }
 
