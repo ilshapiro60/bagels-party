@@ -1,6 +1,9 @@
 import '../config/constants.dart';
 import '../models/user_profile.dart';
 
+// App Store (iOS): create **consumable** IAPs in App Store Connect with these
+// exact IDs (required for 3.1.1). Android uses Stripe; see IapService.
+
 /// Returns the hosting fee for a party based on the user's account type,
 /// host count, and guest limit.
 double calculateHostingFee(UserProfile user, int maxGuests) {

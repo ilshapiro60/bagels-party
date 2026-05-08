@@ -41,7 +41,6 @@ class _PartyPaywallScreenState extends ConsumerState<PartyPaywallScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Payment was cancelled or failed. Please try again.')),
         );
-        setState(() => _processing = false);
         return;
       }
 
@@ -51,7 +50,9 @@ class _PartyPaywallScreenState extends ConsumerState<PartyPaywallScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Payment error: $e')),
       );
-      setState(() => _processing = false);
+    } finally {
+      await IapService.instance.finalizeIosPurchaseIfNeeded();
+      if (mounted) setState(() => _processing = false);
     }
   }
 
@@ -99,7 +100,6 @@ class _PartyPaywallScreenState extends ConsumerState<PartyPaywallScreen> {
           ),
         ),
       );
-      setState(() => _processing = false);
     }
   }
 
@@ -169,8 +169,8 @@ class _PartyPaywallScreenState extends ConsumerState<PartyPaywallScreen> {
                           border: Border.all(color: Colors.amber.shade700),
                         ),
                         child: Text(
-                          'Dev only: SKIP_PARTY_PAYMENT is set — Stripe and the '
-                          'payment Cloud Function are skipped. Release builds cannot use this.',
+                          'Dev only: SKIP_PARTY_PAYMENT is set — payment is skipped. '
+                          'Release builds cannot use this.',
                           style: TextStyle(
                             fontSize: 12,
                             color: PawPartyColors.textPrimary,

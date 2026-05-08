@@ -1,5 +1,11 @@
 /// Stripe configuration — replace placeholder values with your real keys.
 ///
+/// **iOS (App Store):** Party hosting fees must use **In-App Purchase** (StoreKit).
+/// Client implementation: `IapService` + consumable product IDs in `hosting_fee.dart`.
+/// Do **not** offer Stripe Payment Sheet on iOS for these digital goods (Guideline 3.1.1).
+///
+/// **Android:** Stripe Payment Sheet + Cloud Function `createPaymentIntent` remains in use.
+///
 /// 1. Create a Stripe account at https://dashboard.stripe.com
 /// 2. Copy your Publishable Key (pk_test_... or pk_live_...)
 /// 3. Set the Secret Key on your Firebase Cloud Function environment
