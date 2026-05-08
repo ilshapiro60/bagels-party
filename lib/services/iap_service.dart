@@ -144,7 +144,18 @@ class IapService {
         'You must be signed in to pay. Sign out and sign in again, then retry.',
       );
     }
+    // Refresh user record + ID token so callables receive a valid Bearer token.
+    try {
+      await authUser.reload();
+    } catch (_) {
+      // Non-fatal; continue with getIdToken.
+    }
     await authUser.getIdToken(true);
+    if (FirebaseAuth.instance.currentUser == null) {
+      throw StateError(
+        'Your session expired. Sign out and sign in again, then retry payment.',
+      );
+    }
 
     try {
       final callable = pawPartyFirebaseFunctions().httpsCallable(
@@ -181,9 +192,12 @@ class IapService {
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'unauthenticated') {
         throw StateError(
-          'Payment service could not verify your login (${e.message ?? e.code}). '
-          'Try signing out and back in. For production, ensure the Cloud Function '
-          'allows authenticated callables and Firebase Auth matches this app.',
+          'Payment could not verify your Firebase login (${e.message ?? e.code}). '
+          'Sign out and sign in again. If this persists: deploy latest '
+          '`createPaymentIntent` (Firebase Console → Functions), confirm this build '
+          'uses the same Firebase project as production (google-services.json / '
+          'flutterfire), and add your debug/release SHA-1 in Firebase Console → '
+          'Project settings → Your apps.',
         );
       }
       rethrow;

@@ -5,7 +5,10 @@ class AppConstants {
   static const String privacyPolicyUrl = 'https://ilshapiro60.github.io/bagels-party/privacy';
   static const String termsOfServiceUrl = 'https://ilshapiro60.github.io/bagels-party/terms';
   static const double defaultRadius = 5.0; // miles
-  static const int maxFreeHostings = 999;
+  /// Regular (non-business) accounts: hosting fee is waived for the first N parties,
+  /// then [partyFeeRegular] applies and [PartyPaywallScreen] is shown.
+  /// Very large values (e.g. 999) effectively disable paid hosting for regular users.
+  static const int maxFreeHostings = 3;
 
   // Per-party hosting fees
   static const double partyFeeRegular = 3.99;

@@ -357,7 +357,13 @@ const VALID_PRODUCTS = {
 };
 
 exports.createPaymentIntent = onCall(
-  { secrets: [stripeSecretKey], region: "us-central1" },
+  {
+    secrets: [stripeSecretKey],
+    region: "us-central1",
+    // Match other callables: debug/sideload builds often lack a valid App Check token;
+    // enforcement can reject the request before Firebase attaches auth context.
+    enforceAppCheck: false,
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Sign in to continue.");
