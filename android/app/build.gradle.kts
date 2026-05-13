@@ -8,8 +8,9 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Release signing: Codemagic sets CI=true and CM_* (see
-// https://docs.codemagic.io/code-signing-yaml/signing-android/ ).
+// Release signing:
+// - Codemagic upload builds: CI=true plus CM_KEYSTORE_* / CM_KEY_ALIAS / CM_KEY_PASSWORD
+//   (see https://docs.codemagic.io/code-signing-yaml/signing-android/ ).
 // Locally, use android/key.properties (gitignored) per
 // https://docs.flutter.dev/deployment/android#signing-the-app
 //
@@ -32,6 +33,18 @@ fun loadLocalKeyProperties(file: java.io.File): Map<String, String> {
 
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = loadLocalKeyProperties(keystorePropertiesFile)
+
+// Codemagic sets CI=true for every build, but only upload-keystore workflows define CM_*.
+// PR smoke builds must fall back to debug signing — do not !! on missing env vars.
+val useCodemagicSigning =
+    System.getenv("CI") == "true" &&
+        listOf(
+                System.getenv("CM_KEYSTORE_PATH"),
+                System.getenv("CM_KEYSTORE_PASSWORD"),
+                System.getenv("CM_KEY_ALIAS"),
+                System.getenv("CM_KEY_PASSWORD"),
+            )
+            .all { !it.isNullOrEmpty() }
 
 android {
     namespace = "com.pawparty.paw_party"
@@ -61,7 +74,7 @@ android {
 
     signingConfigs {
         create("release") {
-            if (System.getenv("CI") == "true") {
+            if (useCodemagicSigning) {
                 storeFile = file(System.getenv("CM_KEYSTORE_PATH")!!)
                 storePassword = System.getenv("CM_KEYSTORE_PASSWORD")!!
                 keyAlias = System.getenv("CM_KEY_ALIAS")!!
@@ -77,8 +90,7 @@ android {
 
     buildTypes {
         release {
-            val useReleaseKeystore =
-                System.getenv("CI") == "true" || keystorePropertiesFile.exists()
+            val useReleaseKeystore = useCodemagicSigning || keystorePropertiesFile.exists()
             signingConfig =
                 if (useReleaseKeystore) {
                     signingConfigs.getByName("release")
