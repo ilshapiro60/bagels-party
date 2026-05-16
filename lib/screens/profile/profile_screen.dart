@@ -1,4 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -585,6 +586,13 @@ class ProfileScreen extends ConsumerWidget {
           'Account privacy, data & blocked users',
           () => context.push('/settings/privacy'),
         ),
+        if (defaultTargetPlatform == TargetPlatform.iOS)
+          _menuItem(
+            Icons.storefront_outlined,
+            'In-App Purchases',
+            'Verify hosting products from the App Store',
+            () => context.push('/settings/iap-status'),
+          ),
         _menuItem(
           Icons.help_outline,
           'Help & Support',

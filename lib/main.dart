@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
@@ -10,6 +11,7 @@ import 'app.dart';
 import 'config/firebase_bootstrap.dart';
 import 'config/stripe_config.dart';
 import 'config/theme.dart';
+import 'services/iap_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +37,15 @@ Future<void> main() async {
 
   Stripe.publishableKey = StripeConfig.publishableKey;
   Stripe.merchantIdentifier = StripeConfig.appleMerchantId;
+
+  // iOS only: eagerly issue an SKProductsRequest for all party-hosting
+  // consumables so Apple's App Review automated check (Guideline 2.1(b))
+  // observes StoreKit traffic referencing every declared product ID at
+  // launch — not only after a user happens to reach the paywall. Fire and
+  // forget; failures are recorded inside the service for the Profile UI.
+  if (Platform.isIOS) {
+    unawaited(IapService.instance.warmUp());
+  }
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

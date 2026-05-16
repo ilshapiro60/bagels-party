@@ -19,6 +19,7 @@ import '../screens/create_pet/create_pet_screen.dart';
 import '../screens/meetup/edit_party_screen.dart';
 import '../screens/settings/about_screen.dart';
 import '../screens/settings/help_support_screen.dart';
+import '../screens/settings/iap_status_screen.dart';
 import '../screens/settings/privacy_safety_screen.dart';
 import '../screens/meetup/host_meetup_screen.dart';
 import '../screens/passport/passport_screen.dart';
@@ -206,6 +207,11 @@ final appRouter = GoRouter(
       path: '/settings/about',
       pageBuilder: (context, state) =>
           const CupertinoPage(child: AboutScreen()),
+    ),
+    GoRoute(
+      path: '/settings/iap-status',
+      pageBuilder: (context, state) =>
+          const CupertinoPage(child: IapStatusScreen()),
     ),
     GoRoute(
       path: '/edit-party/:id',

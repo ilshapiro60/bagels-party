@@ -7,10 +7,32 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../config/cloud_functions_region.dart';
+import '../utils/hosting_fee.dart';
 
 /// When `true`, skips Stripe + Cloud Function (debug/profile only). See StripeConfig.
 const bool _skipPartyPaymentFromDefine =
     bool.fromEnvironment('SKIP_PARTY_PAYMENT', defaultValue: false);
+
+/// Result of warming / probing the App Store IAP catalogue.
+///
+/// Used by the "Verify In-App Purchases" tile in Profile so App Review can
+/// confirm StoreKit is wired up without first reaching the paywall.
+class IapWarmUpResult {
+  IapWarmUpResult({
+    required this.storeAvailable,
+    required this.foundProductIds,
+    required this.notFoundProductIds,
+    this.errorMessage,
+  });
+
+  final bool storeAvailable;
+  final List<String> foundProductIds;
+  final List<String> notFoundProductIds;
+  final String? errorMessage;
+
+  bool get allFound =>
+      storeAvailable && notFoundProductIds.isEmpty && errorMessage == null;
+}
 
 /// Party-hosting payments:
 /// - **iOS**: App Store In-App Purchase (consumables) — Guideline 3.1.1.
@@ -21,8 +43,83 @@ class IapService {
 
   PurchaseDetails? _pendingIosPurchase;
 
+  /// Last warmup outcome, cached so Profile can show status without re-querying.
+  IapWarmUpResult? _lastWarmUp;
+  IapWarmUpResult? get lastWarmUp => _lastWarmUp;
+
+  /// Cached ProductDetails keyed by productId, populated by [warmUp].
+  /// Used by [purchasePartyHosting] to avoid a second `SKProductsRequest`.
+  final Map<String, ProductDetails> _productCache = <String, ProductDetails>{};
+
   /// Whether dev-only payment skip is compiled in (still requires non-release).
   static bool get skipPartyPaymentRequested => _skipPartyPaymentFromDefine;
+
+  /// Eagerly issues a single `SKProductsRequest` for **all four** party-hosting
+  /// consumables on iOS at app launch.
+  ///
+  /// This is critical for App Review (Guideline 2.1(b)): Apple's automated
+  /// check scans the running binary for StoreKit traffic referencing the
+  /// declared product IDs. Querying every ID early — instead of only when the
+  /// paywall is reached — guarantees the products are "found in the submitted
+  /// binary". Safe to call multiple times; failures are swallowed.
+  Future<IapWarmUpResult> warmUp() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) {
+      final result = IapWarmUpResult(
+        storeAvailable: false,
+        foundProductIds: const <String>[],
+        notFoundProductIds: kPartyHostingProductIds.toList(),
+        errorMessage: 'Not iOS — App Store IAP not used on this platform.',
+      );
+      _lastWarmUp = result;
+      return result;
+    }
+
+    final iap = InAppPurchase.instance;
+    try {
+      final available = await iap.isAvailable();
+      if (!available) {
+        final result = IapWarmUpResult(
+          storeAvailable: false,
+          foundProductIds: const <String>[],
+          notFoundProductIds: kPartyHostingProductIds.toList(),
+          errorMessage: 'App Store is unavailable (no network or store down).',
+        );
+        _lastWarmUp = result;
+        return result;
+      }
+
+      final response = await iap.queryProductDetails(kPartyHostingProductIds);
+      _productCache
+        ..clear()
+        ..addEntries(response.productDetails.map((p) => MapEntry(p.id, p)));
+
+      final result = IapWarmUpResult(
+        storeAvailable: true,
+        foundProductIds: response.productDetails.map((p) => p.id).toList(),
+        notFoundProductIds: response.notFoundIDs,
+        errorMessage: response.error?.message,
+      );
+      _lastWarmUp = result;
+      if (kDebugMode) {
+        debugPrint(
+          'IapService.warmUp: found=${result.foundProductIds} '
+          'notFound=${result.notFoundProductIds} '
+          'err=${result.errorMessage}',
+        );
+      }
+      return result;
+    } catch (e, st) {
+      debugPrint('IapService.warmUp failed: $e\n$st');
+      final result = IapWarmUpResult(
+        storeAvailable: false,
+        foundProductIds: const <String>[],
+        notFoundProductIds: kPartyHostingProductIds.toList(),
+        errorMessage: e.toString(),
+      );
+      _lastWarmUp = result;
+      return result;
+    }
+  }
 
   /// Call after hosting digital content is delivered (meetup saved) or attempt ends,
   /// so StoreKit can finish the transaction (consumables).
@@ -75,14 +172,21 @@ class IapService {
       );
     }
 
-    final response = await iap.queryProductDetails({productId});
-    if (response.productDetails.isEmpty) {
-      throw StateError(
-        'Hosting product "$productId" is missing in App Store Connect. '
-        'Add a consumable IAP with this exact product ID (see hosting_fee.dart).',
-      );
+    ProductDetails? product = _productCache[productId];
+    if (product == null) {
+      // Cache miss — warmUp hasn't completed or store rejected this ID earlier.
+      // Re-query to surface a precise error to the user.
+      final response = await iap.queryProductDetails({productId});
+      if (response.productDetails.isEmpty) {
+        throw StateError(
+          'Hosting product "$productId" is missing in App Store Connect. '
+          'Confirm the consumable IAP exists with this exact product ID, is in '
+          '"Ready to Submit" state, and is attached to the current app version.',
+        );
+      }
+      product = response.productDetails.first;
+      _productCache[productId] = product;
     }
-    final product = response.productDetails.first;
 
     final completer = Completer<PurchaseDetails?>();
     StreamSubscription<List<PurchaseDetails>>? sub;
