@@ -57,6 +57,11 @@ class FirestoreProfileRepository {
 
   /// Profile fields visible to other users: only http/https/gs media URLs.
   /// Local device paths are stripped so neighbors do not get broken images.
+  ///
+  /// All non-media fields on [UserProfile] must be forwarded explicitly here —
+  /// the rebuilt instance is what gets serialized by [profileToFirestore], so
+  /// any field omitted below falls back to the constructor default (e.g.
+  /// `isBusinessAccount = false`) and silently wipes the cloud copy on save.
   static UserProfile profileForCloudWrite(UserProfile u) {
     final okPhoto = FirestorePetRepository.isShareableMediaUrl(u.photoUrl);
     return UserProfile(
@@ -77,12 +82,17 @@ class FirestoreProfileRepository {
       longitude: u.longitude,
       petIds: u.petIds,
       friendUids: u.friendUids,
+      blockedUids: u.blockedUids,
       hostCount: u.hostCount,
       attendCount: u.attendCount,
       hostRating: u.hostRating,
       guestRating: u.guestRating,
       createdAt: u.createdAt,
       bio: u.bio,
+      isBusinessAccount: u.isBusinessAccount,
+      businessName: u.businessName,
+      businessCategory: u.businessCategory,
+      businessPlaceId: u.businessPlaceId,
       isCheckedIn: u.isCheckedIn,
       termsAccepted: u.termsAccepted,
     );
